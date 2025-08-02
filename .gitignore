@@ -43,6 +43,12 @@ jspm_packages/
 # Yarn Integrity file
 .yarn-integrity
 
+# Render CLI executables and test files
+cli_v1.1.0.exe
+render.exe
+test.js
+quick-test.js
+
 # OS generated files
 .DS_Store
 .DS_Store?
