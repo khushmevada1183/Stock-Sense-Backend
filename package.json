@@ -1,0 +1,34 @@
+{
+  "name": "indian-stock-api",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "description": "Indian Stock API Backend Server",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "build": "echo 'No build step needed for backend'",
+    "test": "echo 'No tests specified'"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "cors": "^2.8.5",
+    "helmet": "^8.1.0",
+    "morgan": "^1.10.1",
+    "dotenv": "^17.2.1",
+    "compression": "^1.8.1",
+    "axios": "^1.6.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "stock",
+    "api",
+    "indian-stocks",
+    "express",
+    "backend"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}
