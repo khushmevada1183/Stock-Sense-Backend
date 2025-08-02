@@ -13,6 +13,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const { errorMiddleware } = require('./utils/errorHandler');
 const apiKeyAuth = require('./middleware/apiKeyAuth');
+const { rateLimitMiddleware } = require('./middleware/rateLimitMiddleware');
 const { API_CONFIG } = require('./config');
 
 // Import API routes - ensure this is a router
@@ -27,6 +28,9 @@ app.use(helmet()); // Security headers
 app.use(cors()); // Enable CORS
 app.use(express.json()); // Parse JSON request bodies
 app.use(morgan('dev')); // HTTP request logging
+
+// Add global rate limiting
+app.use(rateLimitMiddleware);
 
 // Try to use compression if available
 try {

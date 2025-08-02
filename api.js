@@ -26,14 +26,20 @@ class ApiKeyManager {
     this.keyStatus = new Map();
     this.consecutiveFailures = 0;
     this.lastKeyRotation = Date.now();
+    this.lastRequestTime = 0;
+    this.requestQueue = [];
+    this.isProcessing = false;
     
     // Initialize key status tracking
-    this.keys.forEach(key => {
+    this.keys.forEach((key, index) => {
       this.keyStatus.set(key, {
         isAvailable: true,
         rateLimitResetTimestamp: 0,
         usageCount: 0,
-        lastErrorTimestamp: 0
+        lastErrorTimestamp: 0,
+        lastUsedTimestamp: 0,
+        requestsPerMinute: 0,
+        requestTimestamps: []
       });
     });
     
@@ -49,7 +55,36 @@ class ApiKeyManager {
     return this.keys[this.currentKeyIndex] || '';
   }
 
-  markCurrentKeyRateLimited(resetTimeInSeconds = 60) {
+  // Add request rate limiting (max 10 requests per minute per key)
+  async waitForRateLimit(key) {
+    const now = Date.now();
+    const status = this.keyStatus.get(key);
+    
+    if (!status) return;
+    
+    // Clean old timestamps (older than 1 minute)
+    status.requestTimestamps = status.requestTimestamps.filter(
+      timestamp => now - timestamp < 60000
+    );
+    
+    // If we've made too many requests in the last minute, wait
+    if (status.requestTimestamps.length >= 10) {
+      const oldestRequest = Math.min(...status.requestTimestamps);
+      const waitTime = 60000 - (now - oldestRequest) + 1000; // Extra 1 second buffer
+      
+      if (waitTime > 0) {
+        console.log(`Rate limiting: waiting ${Math.ceil(waitTime/1000)}s for key ${this.currentKeyIndex}`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+    }
+    
+    // Add current request timestamp
+    status.requestTimestamps.push(now);
+    status.lastUsedTimestamp = now;
+    this.keyStatus.set(key, status);
+  }
+
+  markCurrentKeyRateLimited(resetTimeInSeconds = 300) { // Increased to 5 minutes
     const currentKey = this.getCurrentKey();
     if (!currentKey) return;
     
@@ -60,7 +95,10 @@ class ApiKeyManager {
       status.isAvailable = false;
       status.rateLimitResetTimestamp = resetTimestamp;
       status.lastErrorTimestamp = Date.now();
+      // Clear request timestamps to reset rate limiting
+      status.requestTimestamps = [];
       this.keyStatus.set(currentKey, status);
+      console.log(`Key ${this.currentKeyIndex} marked as rate limited for ${resetTimeInSeconds} seconds`);
     }
     
     this.rotateToNextAvailableKey();
@@ -73,6 +111,7 @@ class ApiKeyManager {
     const status = this.keyStatus.get(currentKey);
     if (status) {
       status.usageCount++;
+      status.lastUsedTimestamp = Date.now();
       this.keyStatus.set(currentKey, status);
     }
     
@@ -103,11 +142,41 @@ class ApiKeyManager {
       attempts++;
     }
     
-    // If no available keys, use the next one anyway
-    this.currentKeyIndex = (oldIndex + 1) % this.keys.length;
+    // If no available keys, find the one with the earliest reset time
+    let earliestResetKey = 0;
+    let earliestResetTime = Infinity;
+    
+    this.keys.forEach((key, index) => {
+      const status = this.keyStatus.get(key);
+      if (status && status.rateLimitResetTimestamp < earliestResetTime) {
+        earliestResetTime = status.rateLimitResetTimestamp;
+        earliestResetKey = index;
+      }
+    });
+    
+    this.currentKeyIndex = earliestResetKey;
     this.lastKeyRotation = Date.now();
-    console.log(`No available API keys. Rotating anyway to index ${this.currentKeyIndex}`);
+    
+    const waitTime = Math.max(0, earliestResetTime - Date.now());
+    console.log(`All keys rate limited. Using key ${this.currentKeyIndex} (available in ${Math.ceil(waitTime/1000)}s)`);
     return false;
+  }
+
+  // Get status of all keys for debugging
+  getKeyStatuses() {
+    const statuses = {};
+    this.keys.forEach((key, index) => {
+      const status = this.keyStatus.get(key);
+      const maskedKey = key.substring(0, 8) + '...';
+      statuses[index] = {
+        key: maskedKey,
+        isAvailable: status?.isAvailable || false,
+        rateLimitResetIn: Math.max(0, (status?.rateLimitResetTimestamp || 0) - Date.now()),
+        usageCount: status?.usageCount || 0,
+        recentRequests: status?.requestTimestamps?.length || 0
+      };
+    });
+    return statuses;
   }
 
   _refreshKeyAvailability() {
@@ -156,7 +225,7 @@ async function getData(endpoint, params = {}, options = {}) {
   }
 
   const url = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  const maxRetries = options.maxRetries || 3;
+  const maxRetries = Math.min(options.maxRetries || 2, keyManager.keys.length); // Reduced retries
   let attempts = 0;
   
   while (attempts < maxRetries) {
@@ -166,8 +235,11 @@ async function getData(endpoint, params = {}, options = {}) {
       throw new Error('No valid API key available.');
     }
     
+    // Wait for rate limiting before making request
+    await keyManager.waitForRateLimit(apiKey);
+    
     try {
-      console.log(`API Request (${attempts + 1}/${maxRetries}): ${url}`);
+      console.log(`API Request (${attempts + 1}/${maxRetries}): ${url} with key ${keyManager.currentKeyIndex}`);
       
       // Following exact format from API examples
       const requestOptions = {
@@ -194,17 +266,19 @@ async function getData(endpoint, params = {}, options = {}) {
       if (error.response && error.response.status === 429) {
         console.warn('API rate limit hit');
         
-        // Get retry-after header or default to 60 seconds
+        // Get retry-after header or default to 5 minutes
         const retryAfter = error.response.headers['retry-after'] 
           ? parseInt(error.response.headers['retry-after'], 10) 
-          : 60;
+          : 300; // 5 minutes default
           
         // Mark current key as rate limited
         keyManager.markCurrentKeyRateLimited(retryAfter);
         
         if (attempts < maxRetries) {
-          // Small delay before retry with new key
-          await new Promise(r => setTimeout(r, 1000));
+          // Exponential backoff: wait longer with each attempt
+          const backoffDelay = Math.min(5000 * Math.pow(2, attempts - 1), 30000); // Max 30 seconds
+          console.log(`Waiting ${backoffDelay/1000}s before retry...`);
+          await new Promise(r => setTimeout(r, backoffDelay));
           continue; // Retry with new key
         }
       } else {
@@ -216,7 +290,8 @@ async function getData(endpoint, params = {}, options = {}) {
           keyManager.rotateToNextAvailableKey();
           
           if (attempts < maxRetries) {
-            await new Promise(r => setTimeout(r, 1000));
+            // Small delay before retry
+            await new Promise(r => setTimeout(r, 2000));
             continue; // Retry with new key
           }
         }
@@ -229,7 +304,16 @@ async function getData(endpoint, params = {}, options = {}) {
         const message = error.response.data?.message || error.message;
         
         if (status === 429) {
-          throw new Error(`API rate limit exceeded. Please try again later. (${message})`);
+          // Check if all keys are rate limited
+          const keyStatuses = keyManager.getKeyStatuses();
+          const availableKeys = Object.values(keyStatuses).filter(s => s.isAvailable).length;
+          
+          if (availableKeys === 0) {
+            const earliestReset = Math.min(...Object.values(keyStatuses).map(s => s.rateLimitResetIn));
+            throw new Error(`All API keys are rate limited. Please try again in ${Math.ceil(earliestReset/60000)} minutes. (${message})`);
+          } else {
+            throw new Error(`API rate limit exceeded. Please try again later. (${message})`);
+          }
         } else if (status === 401 || status === 403) {
           throw new Error(`API authentication failed. Check your API key. (${message})`);
         } else if (status === 404) {
@@ -594,6 +678,9 @@ async function getStockForecasts(stockId, measureCode = 'EPS', periodType = 'Ann
 const apiExports = {
   // Generic function
   getData,
+  
+  // Key manager access for debugging
+  getKeyManager: () => keyManager,
   
   // Health check
   getHealthStatus,

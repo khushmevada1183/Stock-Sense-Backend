@@ -204,4 +204,25 @@ router.get('/admin/cache/stats', asyncHandler(async (req, res) => {
   });
 }));
 
+// API key status endpoint for debugging
+router.get('/admin/api-keys/status', asyncHandler(async (req, res) => {
+  // This should have additional authentication in production
+  const api = require('./api');
+  res.json({ 
+    success: true, 
+    data: api.getKeyManager().getKeyStatuses(),
+    currentKey: api.getKeyManager().currentKeyIndex
+  });
+}));
+
+// Rate limiter status endpoint for debugging  
+router.get('/admin/rate-limit/stats', asyncHandler(async (req, res) => {
+  // This should have additional authentication in production
+  const { getRateLimiterStats } = require('./middleware/rateLimitMiddleware');
+  res.json({ 
+    success: true, 
+    data: getRateLimiterStats()
+  });
+}));
+
 module.exports = router;
