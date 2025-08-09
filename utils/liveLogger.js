@@ -125,86 +125,353 @@ class LiveLogger extends EventEmitter {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Live Logs</title>
+  <title>Live Logs - Stock Sense Backend</title>
   <style>
     :root { color-scheme: dark; }
-    body { margin:0; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; background:#0b0f14; color:#e3e8ef; }
-    header { position:sticky; top:0; background:#0b0f14; border-bottom:1px solid #1f2937; padding:10px 14px; display:flex; gap:10px; align-items:center; z-index:10; }
-    .pill { padding:4px 8px; border-radius:999px; background:#111827; color:#9ca3af; font-size:12px; }
-    #controls { display:flex; gap:8px; margin-left:auto; }
-    #log { padding:12px 14px; white-space:pre-wrap; line-height:1.4; }
-    .row { padding:2px 0; border-bottom:1px dashed #111827; }
-    .t { color:#9ca3af; }
-    .lvl-http { color:#60a5fa; }
-    .lvl-info { color:#a7f3d0; }
-    .lvl-warn { color:#f59e0b; }
-    .lvl-error { color:#f87171; }
-    .muted { color:#6b7280; }
-    input, select { background:#0b1220; color:#e3e8ef; border:1px solid #1f2937; padding:6px 8px; border-radius:6px; }
-    button { background:#111827; color:#e3e8ef; border:1px solid #1f2937; padding:6px 10px; border-radius:6px; cursor:pointer; }
+    * { box-sizing: border-box; }
+    body { 
+      margin: 0; 
+      font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; 
+      background: #0d1117; 
+      color: #f0f6fc; 
+      height: 100vh;
+      overflow: hidden;
+    }
+    
+    header { 
+      position: sticky; 
+      top: 0; 
+      background: #161b22; 
+      border-bottom: 1px solid #30363d; 
+      padding: 12px 16px; 
+      display: flex; 
+      gap: 12px; 
+      align-items: center; 
+      z-index: 100;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+    
+    .status-dot { 
+      width: 8px; 
+      height: 8px; 
+      border-radius: 50%; 
+      background: #3fb950; 
+      animation: pulse 2s infinite; 
+    }
+    
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
+    
+    .title {
+      font-weight: 600;
+      color: #f0f6fc;
+      font-size: 14px;
+    }
+    
+    .subtitle {
+      color: #8b949e;
+      font-size: 12px;
+    }
+    
+    #controls { 
+      display: flex; 
+      gap: 8px; 
+      margin-left: auto; 
+      align-items: center;
+    }
+    
+    #log-container {
+      height: calc(100vh - 60px);
+      overflow-y: auto;
+      background: #0d1117;
+      position: relative;
+    }
+    
+    #log { 
+      padding: 0;
+      font-size: 12px;
+      line-height: 1.5;
+      font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+    }
+    
+    .log-entry { 
+      padding: 4px 16px; 
+      border-bottom: 1px solid #21262d;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      min-height: 24px;
+    }
+    
+    .log-entry:hover {
+      background: #161b22;
+    }
+    
+    .timestamp { 
+      color: #6e7681; 
+      font-size: 11px;
+      min-width: 80px;
+      flex-shrink: 0;
+    }
+    
+    .level-badge {
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 500;
+      text-transform: uppercase;
+      min-width: 40px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    
+    .level-http { background: #1f6feb; color: #fff; }
+    .level-info { background: #238636; color: #fff; }
+    .level-warn { background: #fb8500; color: #000; }
+    .level-error { background: #da3633; color: #fff; }
+    .level-ping { background: #6e7681; color: #fff; }
+    
+    .message { 
+      flex: 1;
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+    
+    .message.error { color: #f85149; }
+    .message.warn { color: #f0883e; }
+    .message.http { color: #79c0ff; }
+    
+    input, select { 
+      background: #21262d; 
+      color: #f0f6fc; 
+      border: 1px solid #30363d; 
+      padding: 6px 8px; 
+      border-radius: 6px;
+      font-size: 12px;
+    }
+    
+    input:focus, select:focus {
+      outline: none;
+      border-color: #1f6feb;
+      box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.2);
+    }
+    
+    button { 
+      background: #21262d; 
+      color: #f0f6fc; 
+      border: 1px solid #30363d; 
+      padding: 6px 12px; 
+      border-radius: 6px; 
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.15s ease;
+    }
+    
+    button:hover {
+      background: #30363d;
+      border-color: #8b949e;
+    }
+    
+    button.paused {
+      background: #fb8500;
+      color: #000;
+      border-color: #fb8500;
+    }
+    
+    .connection-status {
+      position: absolute;
+      top: 8px;
+      right: 16px;
+      font-size: 11px;
+      color: #8b949e;
+      background: #161b22;
+      padding: 4px 8px;
+      border-radius: 4px;
+      border: 1px solid #30363d;
+    }
+    
+    .connection-status.connected { color: #3fb950; border-color: #3fb950; }
+    .connection-status.disconnected { color: #f85149; border-color: #f85149; }
+    
+    label { color: #8b949e; font-size: 12px; }
   </style>
-  </head>
-  <body>
-    <header>
-      <div class="pill">/live-logs</div>
-      <div class="muted">Live application logs (auto-scroll)</div>
-      <div id="controls">
-        <label class="muted">Level:</label>
-        <select id="level">
-          <option value="all" selected>all</option>
-          <option value="http">http</option>
-          <option value="info">info</option>
-          <option value="warn">warn</option>
-          <option value="error">error</option>
-        </select>
-        <input id="search" placeholder="filter text (regex)" />
-        <button id="pause">Pause</button>
-        <button id="clear">Clear</button>
-      </div>
-    </header>
+</head>
+<body>
+  <header>
+    <div class="status-dot"></div>
+    <div>
+      <div class="title">Live Logs</div>
+      <div class="subtitle">Stock Sense Backend • Real-time application logs</div>
+    </div>
+    <div id="controls">
+      <label>Level:</label>
+      <select id="level">
+        <option value="all" selected>All</option>
+        <option value="http">HTTP</option>
+        <option value="info">Info</option>
+        <option value="warn">Warn</option>
+        <option value="error">Error</option>
+      </select>
+      <input id="search" placeholder="Filter logs (regex)" />
+      <button id="pause">Pause</button>
+      <button id="clear">Clear</button>
+    </div>
+  </header>
+  
+  <div id="log-container">
+    <div class="connection-status" id="status">Connecting...</div>
     <div id="log"></div>
-    <script>
-      const log = document.getElementById('log');
-      const levelSel = document.getElementById('level');
-      const search = document.getElementById('search');
-      const pauseBtn = document.getElementById('pause');
-      const clearBtn = document.getElementById('clear');
-      let paused = false;
-      let rx = null;
-      let currentLevel = 'all';
-      search.addEventListener('input', () => {
-        try { rx = search.value ? new RegExp(search.value, 'i') : null; } catch { rx = null; }
-      });
-      levelSel.addEventListener('change', () => { currentLevel = levelSel.value; });
-      pauseBtn.addEventListener('click', () => { paused = !paused; pauseBtn.textContent = paused ? 'Resume' : 'Pause'; });
-      clearBtn.addEventListener('click', () => { log.innerHTML = ''; });
-      function fmt(d){ try{ return new Date(d).toLocaleTimeString(); }catch{ return d; } }
-      function row(item){
-        const div = document.createElement('div');
-        div.className = 'row';
-        const lvlClass = 'lvl-' + (item.level || 'info');
-        div.innerHTML = '<span class="t">[' + fmt(item.time) + ']</span> ' + '<span class="' + lvlClass + '">(' + (item.level||'info') + ')</span> ' + (item.message || '');
-        return div;
+  </div>
+
+  <script>
+    const log = document.getElementById('log');
+    const logContainer = document.getElementById('log-container');
+    const levelSel = document.getElementById('level');
+    const search = document.getElementById('search');
+    const pauseBtn = document.getElementById('pause');
+    const clearBtn = document.getElementById('clear');
+    const status = document.getElementById('status');
+    
+    let paused = false;
+    let regex = null;
+    let currentLevel = 'all';
+    let autoScroll = true;
+    let logCount = 0;
+    const maxLogs = 1000; // Limit logs to prevent memory issues
+    
+    // Event listeners
+    search.addEventListener('input', () => {
+      try { 
+        regex = search.value ? new RegExp(search.value, 'i') : null; 
+      } catch { 
+        regex = null; 
       }
-      const es = new EventSource('/live-logs/stream');
-      es.addEventListener('log', (ev) => {
-        if (paused) return;
-        try { var item = JSON.parse(ev.data); } catch { return; }
-        if (currentLevel !== 'all' && item.level !== currentLevel) return;
-        if (rx && !rx.test(item.message)) return;
-        const el = row(item);
-        log.appendChild(el);
-        window.scrollTo({ top: document.body.scrollHeight, behavior: 'auto' });
-      });
-      es.onerror = () => {
-        const el = document.createElement('div');
-        el.className = 'row lvl-error';
-        el.textContent = '⚠️ Connection lost. Retrying...';
-        log.appendChild(el);
+    });
+    
+    levelSel.addEventListener('change', () => { 
+      currentLevel = levelSel.value; 
+    });
+    
+    pauseBtn.addEventListener('click', () => { 
+      paused = !paused; 
+      pauseBtn.textContent = paused ? 'Resume' : 'Pause';
+      pauseBtn.className = paused ? 'paused' : '';
+    });
+    
+    clearBtn.addEventListener('click', () => { 
+      log.innerHTML = ''; 
+      logCount = 0;
+    });
+    
+    // Check if user is at bottom for auto-scroll
+    logContainer.addEventListener('scroll', () => {
+      const threshold = 100;
+      autoScroll = (logContainer.scrollHeight - logContainer.scrollTop - logContainer.clientHeight) < threshold;
+    });
+    
+    function formatTime(timestamp) {
+      try {
+        return new Date(timestamp).toLocaleTimeString('en-US', { 
+          hour12: false, 
+          hour: '2-digit', 
+          minute: '2-digit', 
+          second: '2-digit' 
+        });
+      } catch {
+        return timestamp;
+      }
+    }
+    
+    function createLogEntry(item) {
+      if (!item || !item.message) return null;
+      
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      
+      const timestamp = document.createElement('span');
+      timestamp.className = 'timestamp';
+      timestamp.textContent = formatTime(item.time);
+      
+      const levelBadge = document.createElement('span');
+      levelBadge.className = \`level-badge level-\${item.level || 'info'}\`;
+      levelBadge.textContent = (item.level || 'info').toUpperCase();
+      
+      const message = document.createElement('span');
+      message.className = \`message \${item.level || 'info'}\`;
+      message.textContent = item.message;
+      
+      entry.appendChild(timestamp);
+      entry.appendChild(levelBadge);
+      entry.appendChild(message);
+      
+      return entry;
+    }
+    
+    function addLogEntry(item) {
+      if (paused) return;
+      if (currentLevel !== 'all' && item.level !== currentLevel) return;
+      if (regex && !regex.test(item.message)) return;
+      
+      const entry = createLogEntry(item);
+      if (!entry) return;
+      
+      log.appendChild(entry);
+      logCount++;
+      
+      // Remove old entries to prevent memory issues
+      if (logCount > maxLogs) {
+        log.removeChild(log.firstChild);
+        logCount--;
+      }
+      
+      // Auto-scroll to bottom if user is near bottom
+      if (autoScroll) {
+        logContainer.scrollTop = logContainer.scrollHeight;
+      }
+    }
+    
+    // SSE Connection
+    const eventSource = new EventSource('/live-logs/stream');
+    
+    eventSource.onopen = () => {
+      status.textContent = 'Connected';
+      status.className = 'connection-status connected';
+    };
+    
+    eventSource.addEventListener('log', (event) => {
+      try {
+        const item = JSON.parse(event.data);
+        if (item.level !== 'ping') { // Skip ping messages
+          addLogEntry(item);
+        }
+      } catch (e) {
+        console.error('Failed to parse log event:', e);
+      }
+    });
+    
+    eventSource.onerror = () => {
+      status.textContent = 'Disconnected • Reconnecting...';
+      status.className = 'connection-status disconnected';
+      
+      // Add error message to log
+      const errorEntry = {
+        time: new Date().toISOString(),
+        level: 'error',
+        message: '⚠️ Connection lost. Attempting to reconnect...'
       };
-    </script>
-  </body>
-  </html>`;
+      addLogEntry(errorEntry);
+    };
+    
+    // Initial scroll to bottom
+    setTimeout(() => {
+      logContainer.scrollTop = logContainer.scrollHeight;
+    }, 100);
+  </script>
+</body>
+</html>`;
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.status(200).send(html);
   }
