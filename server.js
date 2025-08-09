@@ -11,6 +11,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const { morganStream, patchConsole, liveLogsPage, sseHandler } = require('./utils/liveLogger');
 const { errorMiddleware } = require('./utils/errorHandler');
 const apiKeyAuth = require('./middleware/apiKeyAuth');
 const { rateLimitMiddleware } = require('./middleware/rateLimitMiddleware');
@@ -27,7 +28,10 @@ const PORT = process.env.PORT || 10000;
 app.use(helmet()); // Security headers
 app.use(cors()); // Enable CORS
 app.use(express.json()); // Parse JSON request bodies
-app.use(morgan('dev')); // HTTP request logging
+// HTTP request logging (also forwards to live log stream)
+app.use(morgan('dev', { stream: morganStream }));
+// Mirror console logs to live stream as well
+patchConsole();
 
 // Add global rate limiting
 app.use(rateLimitMiddleware);
@@ -50,6 +54,10 @@ app.get('/health', (req, res) => {
     environment: process.env.NODE_ENV || 'development'
   });
 });
+
+// Live logs UI and SSE stream
+app.get('/live-logs', liveLogsPage);
+app.get('/live-logs/stream', sseHandler);
 
 // API routes - ensure apiRoutes is a router
 // API routes

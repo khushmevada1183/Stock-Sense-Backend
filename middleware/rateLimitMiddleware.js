@@ -79,8 +79,8 @@ class GlobalRateLimiter {
 const rateLimiter = new GlobalRateLimiter();
 
 function rateLimitMiddleware(req, res, next) {
-  // Skip rate limiting for health checks and admin endpoints
-  if (req.path === '/health' || req.path.startsWith('/admin/')) {
+  // Skip rate limiting for health checks, admin endpoints, and live logs
+  if (req.path === '/health' || req.path.startsWith('/admin/') || req.path.startsWith('/live-logs')) {
     return next();
   }
   
