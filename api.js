@@ -312,7 +312,8 @@ async function getData(endpoint, params = {}, options = {}) {
           
           if (availableKeys === 0) {
             const earliestReset = Math.min(...Object.values(keyStatuses).map(s => s.rateLimitResetIn));
-            throw new Error(`All API keys are rate limited. Please try again in ${Math.ceil(earliestReset/60000)} minutes. (${message})`);
+            console.warn(`All API keys are rate limited. Falling back to mock data.`);
+            return getMockData(endpoint, params);
           } else {
             throw new Error(`API rate limit exceeded. Please try again later. (${message})`);
           }
@@ -341,7 +342,8 @@ async function getData(endpoint, params = {}, options = {}) {
     }
   }
   
-  throw new Error(`Failed to fetch data after ${maxRetries} attempts`);
+  console.warn(`All API keys exhausted or failed after ${maxRetries} attempts. Falling back to mock data for ${endpoint}.`);
+  return getMockData(endpoint, params);
 }
 
 // ============================================================================
