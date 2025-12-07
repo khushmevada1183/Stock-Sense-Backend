@@ -312,32 +312,41 @@ async function getData(endpoint, params = {}, options = {}) {
           const availableKeys = Object.values(keyStatuses).filter(s => s.isAvailable).length;
           
           if (availableKeys === 0) {
-            const earliestReset = Math.min(...Object.values(keyStatuses).map(s => s.rateLimitResetIn));
-            throw new Error(`All API keys are rate limited. Please try again in ${Math.ceil(earliestReset/60000)} minutes. (${message})`);
+            console.warn(`All API keys are rate limited. Falling back to mock data.`);
+            break; // Break the loop to reach fallback
           } else {
-            throw new Error(`API rate limit exceeded. Please try again later. (${message})`);
+            console.warn(`API rate limit exceeded. Switching key...`);
+            continue;
           }
         } else if (status === 401 || status === 403) {
-          throw new Error(`API authentication failed. Check your API key. (${message})`);
+          console.warn(`API authentication failed. Check your API key. (${message})`);
+          break;
         } else if (status === 404) {
-          throw new Error(`API endpoint not found: ${url} (${message})`);
+          console.warn(`API endpoint not found: ${url} (${message})`);
+          break;
         } else if (status >= 500) {
-          throw new Error(`API server error (${status}): ${message}`);
+          console.warn(`API server error (${status}): ${message}`);
+          // For server errors, we might want to retry, but if max retries reached, we break
+          if (attempts >= maxRetries) break;
         } else {
-          throw new Error(`API error (${status}): ${message}`);
+          console.warn(`API error (${status}): ${message}`);
+          break;
         }
       } else if (error.request) {
         // Request was made but no response received
         if (error.code === 'ECONNABORTED') {
-          throw new Error('API request timed out. The server took too long to respond.');
+          console.warn('API request timed out. The server took too long to respond.');
         } else if (error.code === 'ECONNREFUSED') {
-          throw new Error('API connection refused. The server may be down or the URL is incorrect.');
+          console.warn('API connection refused. The server may be down or the URL is incorrect.');
         } else {
-          throw new Error(`Network error: ${error.message}`);
+          console.warn(`Network error: ${error.message}`);
         }
+        // For network errors, we might want to retry, but if max retries reached, we break
+        if (attempts >= maxRetries) break;
       } else {
         // Something happened in setting up the request
-        throw new Error(`Request error: ${error.message}`);
+        console.warn(`Request error: ${error.message}`);
+        break;
       }
     }
   }
