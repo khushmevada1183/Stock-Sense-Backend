@@ -225,7 +225,8 @@ async function getData(endpoint, params = {}, options = {}) {
   }
 
   const url = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  const maxRetries = Math.min(options.maxRetries || 2, keyManager.keys.length); // Reduced retries
+  // Allow retrying with all available keys if needed
+  const maxRetries = options.maxRetries || keyManager.keys.length; 
   let attempts = 0;
   
   while (attempts < maxRetries) {
@@ -275,9 +276,10 @@ async function getData(endpoint, params = {}, options = {}) {
         keyManager.markCurrentKeyRateLimited(retryAfter);
         
         if (attempts < maxRetries) {
-          // Exponential backoff: wait longer with each attempt
-          const backoffDelay = Math.min(5000 * Math.pow(2, attempts - 1), 30000); // Max 30 seconds
-          console.log(`Waiting ${backoffDelay/1000}s before retry...`);
+          // If we have more keys, try the next one immediately with a small delay
+          // Only use exponential backoff if we've cycled through many keys
+          const backoffDelay = attempts > keyManager.keys.length ? Math.min(1000 * Math.pow(2, attempts - keyManager.keys.length), 10000) : 100; 
+          console.log(`Switching to next key (attempt ${attempts+1}/${maxRetries})...`);
           await new Promise(r => setTimeout(r, backoffDelay));
           continue; // Retry with new key
         }
