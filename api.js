@@ -6,6 +6,7 @@ if (typeof require !== 'undefined') {
 
 // Use conditional imports for frontend/backend compatibility
 const axios = (typeof require !== 'undefined') ? require('axios') : window.axios;
+const { getMockData } = require('./utils/mockData');
 
 // API Configuration
 const API_URL = process.env.NEXT_PUBLIC_INDIAN_API_URL || process.env.API_URL || 'https://stock.indianapi.in';
@@ -312,8 +313,7 @@ async function getData(endpoint, params = {}, options = {}) {
           
           if (availableKeys === 0) {
             const earliestReset = Math.min(...Object.values(keyStatuses).map(s => s.rateLimitResetIn));
-            console.warn(`All API keys are rate limited. Falling back to mock data.`);
-            return getMockData(endpoint, params);
+            throw new Error(`All API keys are rate limited. Please try again in ${Math.ceil(earliestReset/60000)} minutes. (${message})`);
           } else {
             throw new Error(`API rate limit exceeded. Please try again later. (${message})`);
           }
@@ -342,7 +342,7 @@ async function getData(endpoint, params = {}, options = {}) {
     }
   }
   
-  console.warn(`All API keys exhausted or failed after ${maxRetries} attempts. Falling back to mock data for ${endpoint}.`);
+  console.warn(`All API attempts failed for ${endpoint}. Falling back to mock data.`);
   return getMockData(endpoint, params);
 }
 
@@ -729,62 +729,7 @@ const apiExports = {
   getPortfolioSummary
 };
 
-// Mock data function for development when API is not available
-function getMockData(endpoint, params) {
-  console.log(`Getting mock data for ${endpoint} with params:`, params);
-  
-  // Mock data based on endpoint
-  const mockData = {
-    '/trending': {
-      stocks: [
-        { id: '1', symbol: 'RELIANCE', company_name: 'Reliance Industries', sector_name: 'Oil & Gas', price_change_percentage: 2.45, current_price: 2495.50 },
-        { id: '2', symbol: 'TCS', company_name: 'Tata Consultancy Services', sector_name: 'IT', price_change_percentage: 1.75, current_price: 3452.20 },
-        { id: '3', symbol: 'HDFCBANK', company_name: 'HDFC Bank', sector_name: 'Banking', price_change_percentage: 0.95, current_price: 1657.85 },
-        { id: '4', symbol: 'INFY', company_name: 'Infosys', sector_name: 'IT', price_change_percentage: -0.65, current_price: 1342.30 },
-        { id: '5', symbol: 'ITC', company_name: 'ITC Limited', sector_name: 'FMCG', price_change_percentage: 1.25, current_price: 413.90 }
-      ]
-    },
-    '/news': {
-      news: [
-        { id: '1', title: 'RBI Announces New Monetary Policy', source: 'Economic Times', date: '2025-07-25T10:30:00Z', url: '#', imageUrl: 'https://via.placeholder.com/300x200' },
-        { id: '2', title: 'Reliance Announces Major Expansion Plan', source: 'Business Standard', date: '2025-07-24T14:15:00Z', url: '#', imageUrl: 'https://via.placeholder.com/300x200' },
-        { id: '3', title: 'IT Sector Shows Strong Growth in Q1', source: 'Mint', date: '2025-07-23T09:45:00Z', url: '#', imageUrl: 'https://via.placeholder.com/300x200' },
-        { id: '4', title: 'Market Reaches All-Time High', source: 'CNBC-TV18', date: '2025-07-22T16:20:00Z', url: '#', imageUrl: 'https://via.placeholder.com/300x200' }
-      ]
-    },
-    '/ipo': {
-      ipos: [
-        { name: 'ABC Technologies', symbol: 'ABCTECH', date: '2025-08-10', priceRange: '₹900-950' },
-        { name: 'XYZ Pharmaceuticals', symbol: 'XYZPHARMA', date: '2025-08-15', priceRange: '₹550-600' },
-        { name: 'PQR Industries', symbol: 'PQRIND', date: '2025-08-22', priceRange: '₹1200-1250' }
-      ]
-    },
-    '/price_shockers': {
-      gainers: [
-        { symbol: 'COMPANY1', change_percent: 9.5, last_price: 450.75 },
-        { symbol: 'COMPANY2', change_percent: 8.2, last_price: 1240.30 },
-        { symbol: 'COMPANY3', change_percent: 7.6, last_price: 567.90 }
-      ],
-      losers: [
-        { symbol: 'COMPANY4', change_percent: -6.8, last_price: 890.20 },
-        { symbol: 'COMPANY5', change_percent: -5.9, last_price: 345.60 },
-        { symbol: 'COMPANY6', change_percent: -5.2, last_price: 1120.45 }
-      ]
-    }
-  };
-  
-  // Return mock data for the requested endpoint
-  if (endpoint in mockData) {
-    return mockData[endpoint];
-  }
-  
-  // For any other endpoint, return a generic success response
-  return {
-    success: true,
-    message: 'Mock data response',
-    data: {}
-  };
-}
+
 
 // Export as CommonJS module
 module.exports = apiExports;
