@@ -45,6 +45,7 @@ if (typeof require !== 'undefined') {
 // Use conditional imports for frontend/backend compatibility
 const axios = (typeof require !== 'undefined') ? require('axios') : window.axios;
 const { getMockData } = require('./utils/mockData');
+const cacheManager = require('./utils/cacheManager');
 
 // Import the stock-nse-india package for data extraction
 let NseIndia;
@@ -71,6 +72,116 @@ if (NseIndia) {
 // ============================================================================
 // Data Source Helper Functions (stock-nse-india wrapper)
 // ============================================================================
+
+/**
+ * CACHE STRATEGY CONFIGURATION
+ * 
+ * Defines caching behavior for each endpoint:
+ * - Live Price Endpoints: NO CACHE (prices must be real-time)
+ * - Historical Data: SHORT CACHE (5-10 min) - safe, doesn't change intraday
+ * - Static Data: LONG CACHE (1+ hour) - company info, etc.
+ * 
+ * Cache TTL values: 1 minute = 60000ms, 1 hour = 3600000ms
+ */
+const CACHE_STRATEGY = {
+  // ❌ DO NOT CACHE - LIVE PRICE DATA
+  '/stock': {
+    cacheable: false,
+    ttl: 0,
+    reason: 'Real-time price data must never be cached'
+  },
+  '/trending': {
+    cacheable: false,
+    ttl: 0,
+    reason: 'Real-time trending indices must always be fresh'
+  },
+  '/intraday_data': {
+    cacheable: false,
+    ttl: 0,
+    reason: 'Real-time intraday prices must not be cached'
+  },
+  '/price_shockers': {
+    cacheable: false,
+    ttl: 0,
+    reason: 'Real-time gainers/losers must be current'
+  },
+  '/NSE_most_active': {
+    cacheable: false,
+    ttl: 0,
+    reason: 'Real-time active stocks must always be fresh'
+  },
+  '/BSE_most_active': {
+    cacheable: false,
+    ttl: 0,
+    reason: 'Real-time BSE active stocks must always be fresh'
+  },
+  '/commodities': {
+    cacheable: false,
+    ttl: 0,
+    reason: 'Real-time commodity prices must not be cached'
+  },
+  
+  // ✅ CACHE WITH SHORT TTL - FREQUENTLY CHANGING DATA
+  '/trade_info': {
+    cacheable: true,
+    ttl: 5 * 60 * 1000,  // 5 minutes
+    reason: 'Trade info updates frequently but doesn\'t need to be real-time'
+  },
+  '/option_chain': {
+    cacheable: true,
+    ttl: 5 * 60 * 1000,  // 5 minutes
+    reason: 'Options data updates frequently, cache reduces NSE hits'
+  },
+  '/intraday_chart': {
+    cacheable: true,
+    ttl: 5 * 60 * 1000,  // 5 minutes
+    reason: 'Intraday charts don\'t need extreme real-time updates'
+  },
+  
+  // ✅ CACHE WITH MEDIUM TTL - HISTORICAL DATA
+  '/historical_data': {
+    cacheable: true,
+    ttl: 10 * 60 * 1000,  // 10 minutes
+    reason: 'Historical data doesn\'t change, safe to cache'
+  },
+  '/historical_stats': {
+    cacheable: true,
+    ttl: 10 * 60 * 1000,  // 10 minutes
+    reason: 'Historical statistics are stable throughout the day'
+  },
+  
+  // ✅ CACHE WITH LONG TTL - STATIC DATA
+  '/corporate_info': {
+    cacheable: true,
+    ttl: 60 * 60 * 1000,  // 1 hour
+    reason: 'Corporate info rarely changes, safe for 1 hour cache'
+  },
+  '/ipo': {
+    cacheable: true,
+    ttl: 24 * 60 * 60 * 1000,  // 24 hours
+    reason: 'IPO calendar changes daily, safe to cache overnight'
+  },
+  '/news': {
+    cacheable: true,
+    ttl: 15 * 60 * 1000,  // 15 minutes
+    reason: 'News updates multiple times per hour'
+  },
+  '/industry_search': {
+    cacheable: true,
+    ttl: 60 * 60 * 1000,  // 1 hour
+    reason: 'Industry data is relatively static'
+  },
+  '/stock_forecasts': {
+    cacheable: true,
+    ttl: 60 * 60 * 1000,  // 1 hour
+    reason: 'Forecasts update daily, safe for 1 hour'
+  },
+  '/fetch_52_week_high_low_data': {
+    cacheable: true,
+    ttl: 60 * 60 * 1000,  // 1 hour
+    reason: 'Weekly data changes once per day'
+  }
+};
 
 /**
  * Wrapper for safe NseIndia calls with fallback to mock data
@@ -270,14 +381,44 @@ class ApiKeyManager {
 }
 
 /**
- * Generic GET request function - now using stock-nse-india as primary source
+ * Generic GET request function with SELECTIVE CACHING
+ * 
+ * CACHING STRATEGY:
+ * - Live price endpoints (/stock, /trending, etc): NO CACHE
+ * - Historical data: Cache for 10 minutes
+ * - Static data (corporate info, IPO, etc): Cache for 1+ hours
+ * 
  * @param {string} endpoint - API endpoint to call
  * @param {Object} params - Query parameters
- * @param {Object} options - Additional options
+ * @param {Object} options - Additional options (skipCache, forceFresh)
  * @returns {Promise<any>} - Response data
  */
 async function getData(endpoint, params = {}, options = {}) {
-  // Map API endpoints to NseIndia methods
+  // =============================
+  // STEP 1: CHECK CACHE STRATEGY
+  // =============================
+  const strategy = CACHE_STRATEGY[endpoint] || { cacheable: false, ttl: 0 };
+  const shouldAttemptCache = strategy.cacheable && !options.skipCache && !options.forceFresh;
+  
+  // =============================
+  // STEP 2: GENERATE CACHE KEY
+  // =============================
+  let cacheKey = null;
+  if (shouldAttemptCache) {
+    cacheKey = cacheManager.generateKey(endpoint, params);
+    
+    // Try to get from cache
+    const cachedData = cacheManager.get(cacheKey);
+    if (cachedData) {
+      console.log(`✅ Cache HIT for ${endpoint}`);
+      return cachedData;
+    }
+    console.log(`⚠️  Cache MISS for ${endpoint} (TTL: ${strategy.ttl / 1000}s)`);
+  }
+  
+  // =============================
+  // STEP 3: FETCH FRESH DATA
+  // =============================
   const endpointMap = {
     '/stock': async () => {
       const symbol = params.name || params.symbol;
@@ -345,18 +486,43 @@ async function getData(endpoint, params = {}, options = {}) {
 
   // Try to get data from NseIndia first
   const handler = endpointMap[endpoint];
+  let result = null;
+  
   if (handler) {
     try {
-      const result = await handler();
-      if (result) return result;
+      result = await handler();
+      if (result) {
+        // =============================
+        // STEP 4: STORE IN CACHE
+        // =============================
+        if (shouldAttemptCache && cacheKey && strategy.ttl > 0) {
+          cacheManager.set(cacheKey, result, strategy.ttl, { 
+            tags: ['nse-data', endpoint.replace('/', '')],
+            priority: 'normal'
+          });
+          console.log(`📦 Cached data for ${endpoint} (TTL: ${strategy.ttl / 60000} minutes)`);
+        }
+        return result;
+      }
     } catch (err) {
       console.warn(`Error calling NseIndia for ${endpoint}:`, err.message);
     }
   }
 
   // Fallback to mock data
-  console.log(`Using mock data for endpoint: ${endpoint}`);
-  return getMockData(endpoint, params);
+  console.log(`⏸️  Using mock data for endpoint: ${endpoint}`);
+  const mockResult = getMockData(endpoint, params);
+  
+  // Store mock data in cache too (but with shorter TTL for safety)
+  if (shouldAttemptCache && cacheKey && strategy.cacheable) {
+    const mockCacheTtl = 2 * 60 * 1000; // 2-minute cache for mock data
+    cacheManager.set(cacheKey, mockResult, mockCacheTtl, { 
+      tags: ['mock-data', endpoint.replace('/', '')],
+      priority: 'low'
+    });
+  }
+  
+  return mockResult;
 }
 
 // ============================================================================
@@ -691,6 +857,68 @@ async function getStockForecasts(stockId, measureCode = 'EPS', periodType = 'Ann
 }
 // Add other functions as needed
 
+// ============================================================================
+// CACHE MANAGEMENT UTILITIES (for monitoring and debugging)
+// ============================================================================
+
+/**
+ * Get current cache statistics and status
+ * @returns {Object} - Cache statistics
+ */
+function getCacheStats() {
+  return {
+    strategy: CACHE_STRATEGY,
+    stats: cacheManager.getStats ? cacheManager.getStats() : { message: 'Stats not available' }
+  };
+}
+
+/**
+ * Clear cache for a specific endpoint or all
+ * @param {string} endpoint - Optional endpoint to clear (e.g., '/stock', '/trending')
+ * @param {string} symbol - Optional symbol to clear for specific stocks
+ */
+function clearCache(endpoint = null, symbol = null) {
+  if (!endpoint) {
+    // Clear all cache
+    cacheManager.clear();
+    console.log('✅ Entire cache cleared');
+    return { success: true, message: 'Entire cache cleared' };
+  }
+  
+  if (symbol) {
+    // Clear specific stock data
+    const pattern = `${endpoint}:.*"${symbol.toUpperCase()}".*`;
+    cacheManager.clear(pattern);
+    console.log(`✅ Cache cleared for ${symbol} on endpoint ${endpoint}`);
+    return { success: true, message: `Cache cleared for ${symbol} on ${endpoint}` };
+  }
+  
+  // Clear endpoint cache
+  const pattern = `^${endpoint}:`;
+  cacheManager.clear(pattern);
+  console.log(`✅ Cache cleared for endpoint: ${endpoint}`);
+  return { success: true, message: `Cache cleared for endpoint: ${endpoint}` };
+}
+
+/**
+ * Force refresh data (bypass cache and fetch fresh)
+ * @param {string} endpoint - API endpoint
+ * @param {Object} params - Query parameters
+ * @returns {Promise<any>} - Fresh data
+ */
+async function getDataFresh(endpoint, params = {}) {
+  console.log(`🔄 Force refreshing data for ${endpoint}`);
+  return getData(endpoint, params, { forceFresh: true });
+}
+
+/**
+ * Get cache strategy information
+ * @returns {Object} - Cache strategy details
+ */
+function getCacheStrategy() {
+  return CACHE_STRATEGY;
+}
+
 // Create a common object for exports
 const apiExports = {
   // Generic function
@@ -732,6 +960,12 @@ const apiExports = {
   get52WeekHighLow,
   getStockForecasts,
   getStockTargetPrice,
+  
+  // Cache management utilities
+  getCacheStats,
+  clearCache,
+  getDataFresh,
+  getCacheStrategy,
   
   // Portfolio functions
   getUserPortfolios,
