@@ -1,3 +1,41 @@
+/**
+ * Stock Sense Backend API
+ * 
+ * ============================================================================
+ * 🔄 ARCHITECTURE CHANGE: Data Source Migration (v2.0)
+ * ============================================================================
+ * 
+ * PREVIOUS ARCHITECTURE:
+ *   External APIs (indianapi.in) ←→ API Key Management ←→ Rate Limiting
+ * 
+ * NEW ARCHITECTURE:
+ *   stock-nse-india Package ←→ NSE Direct Access ←→ No API Keys Required
+ * 
+ * BENEFITS:
+ *   ✅ No external API dependencies
+ *   ✅ No API rate limiting issues
+ *   ✅ No API key management overhead
+ *   ✅ Direct NSE data access via stock-nse-india microservice
+ *   ✅ Frontend endpoints remain unchanged
+ * 
+ * DATA SOURCE:
+ *   Primary:   stock-nse-india package (npm install stock-nse-india)
+ *   Fallback:  Mock data for unavailable endpoints
+ * 
+ * ENDPOINT MAPPING:
+ *   /stock                 ↔ getEquityDetails()
+ *   /historical_data       ↔ getEquityHistoricalData()
+ *   /intraday_data         ↔ getEquityIntradayData()
+ *   /option_chain          ↔ getEquityOptionChain()
+ *   /corporate_info        ↔ getEquityCorporateInfo()
+ *   /trade_info            ↔ getEquityTradeInfo()
+ *   /trending              ↔ getEquityStockIndices()
+ *   /price_shockers        ↔ getGainersAndLosersByIndex()
+ *   /NSE_most_active       ↔ getMostActiveEquities()
+ *   /ipo, /commodities     ↔ Falls back to mock data
+ * ============================================================================
+ */
+
 // Load environment variables
 // For backend use
 if (typeof require !== 'undefined') {
@@ -8,18 +46,56 @@ if (typeof require !== 'undefined') {
 const axios = (typeof require !== 'undefined') ? require('axios') : window.axios;
 const { getMockData } = require('./utils/mockData');
 
-// API Configuration
-const API_URL = process.env.NEXT_PUBLIC_INDIAN_API_URL || process.env.API_URL || 'https://stock.indianapi.in';
-console.log('API URL:', API_URL);
-console.log('API KEYS env var:', process.env.NEXT_PUBLIC_INDIAN_API_KEYS);
-const API_KEYS = process.env.NEXT_PUBLIC_INDIAN_API_KEYS?.split(',') || [];
-console.log('API KEYS array length:', API_KEYS.length);
-
-if (!API_KEYS.length) {
-  console.warn('No API keys found in environment variables. Using mock data for development.');
+// Import the stock-nse-india package for data extraction
+let NseIndia;
+try {
+  const { NseIndia: NseIndiaClass } = require('stock-nse-india');
+  NseIndia = NseIndiaClass;
+} catch (err) {
+  console.warn('stock-nse-india package not available:', err.message);
+  NseIndia = null;
 }
 
-// API Key Manager
+// Initialize NseIndia instance (only if available)
+let nseIndiaInstance = null;
+if (NseIndia) {
+  try {
+    nseIndiaInstance = new NseIndia();
+    console.log('✅ stock-nse-india initialized successfully');
+  } catch (err) {
+    console.warn('❌ Failed to initialize stock-nse-india:', err.message);
+    nseIndiaInstance = null;
+  }
+}
+
+// ============================================================================
+// Data Source Helper Functions (stock-nse-india wrapper)
+// ============================================================================
+
+/**
+ * Wrapper for safe NseIndia calls with fallback to mock data
+ */
+async function callNSEIndia(methodName, ...args) {
+  if (!nseIndiaInstance) {
+    console.warn(`⚠️  NseIndia not available, falling back to mock data for ${methodName}`);
+    return null;
+  }
+
+  try {
+    if (typeof nseIndiaInstance[methodName] === 'function') {
+      const result = await nseIndiaInstance[methodName](...args);
+      return result;
+    } else {
+      console.warn(`Method ${methodName} not found on NseIndia instance`);
+      return null;
+    }
+  } catch (err) {
+    console.error(`NseIndia ${methodName} error:`, err.message);
+    return null;
+  }
+}
+
+// API Key Manager (DEPRECATED - kept for backward compatibility)
 class ApiKeyManager {
   constructor() {
     this.keys = API_KEYS;
@@ -193,165 +269,93 @@ class ApiKeyManager {
   }
 }
 
-// Create API key manager instance
-const keyManager = new ApiKeyManager();
-
-// Create axios instance with default config
-const apiClient = axios.create({
-  baseURL: API_URL,
-  timeout: 10000, // 10 second timeout
-  headers: {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json'
-  }
-});
-
 /**
- * Generic GET request function with automatic key rotation on rate limit
+ * Generic GET request function - now using stock-nse-india as primary source
  * @param {string} endpoint - API endpoint to call
  * @param {Object} params - Query parameters
  * @param {Object} options - Additional options
  * @returns {Promise<any>} - Response data
  */
 async function getData(endpoint, params = {}, options = {}) {
-  // Use mock data when no API URL is available (for development)
-  if (!API_URL && process.env.NODE_ENV === 'production') {
-    throw new Error('API_URL is not defined in environment variables.');
-  }
-  
-  // Use mock data in development mode if API_URL is not available
-  if (!API_URL) {
-    console.log(`Using mock data for endpoint: ${endpoint}`);
-    return getMockData(endpoint, params);
+  // Map API endpoints to NseIndia methods
+  const endpointMap = {
+    '/stock': async () => {
+      const symbol = params.name || params.symbol;
+      if (!symbol) return null;
+      return await callNSEIndia('getEquityDetails', symbol);
+    },
+    '/historical_data': async () => {
+      const symbol = params.stock_name || params.symbol;
+      if (!symbol) return null;
+      const range = params.period || '1m';
+      // Parse date range
+      const endDate = new Date();
+      const startDate = new Date();
+      
+      // Map range to days
+      const rangeMap = { '1m': 30, '6m': 180, '1yr': 365, '3yr': 1095, '5yr': 1825 };
+      const days = rangeMap[range] || 30;
+      startDate.setDate(startDate.getDate() - days);
+      
+      return await callNSEIndia('getEquityHistoricalData', symbol, { start: startDate, end: endDate });
+    },
+    '/intraday_data': async () => {
+      const symbol = params.stock_name || params.symbol;
+      if (!symbol) return null;
+      return await callNSEIndia('getEquityIntradayData', symbol);
+    },
+    '/option_chain': async () => {
+      const symbol = params.stock_name || params.symbol;
+      if (!symbol) return null;
+      return await callNSEIndia('getEquityOptionChain', symbol);
+    },
+    '/corporate_info': async () => {
+      const symbol = params.stock_name || params.symbol;
+      if (!symbol) return null;
+      return await callNSEIndia('getEquityCorporateInfo', symbol);
+    },
+    '/trade_info': async () => {
+      const symbol = params.stock_name || params.symbol;
+      if (!symbol) return null;
+      return await callNSEIndia('getEquityTradeInfo', symbol);
+    },
+    '/trending': async () => {
+      return await callNSEIndia('getEquityStockIndices');
+    },
+    '/price_shockers': async () => {
+      return await callNSEIndia('getGainersAndLosersByIndex', params.index || 'NIFTY 50');
+    },
+    '/NSE_most_active': async () => {
+      return await callNSEIndia('getMostActiveEquities');
+    },
+    '/BSE_most_active': async () => {
+      // BSE data not directly available in stock-nse-india, fall back to mock
+      return null;
+    },
+    '/ipo': async () => {
+      // IPO data not available in stock-nse-india, fall back to mock
+      return null;
+    },
+    '/commodities': async () => {
+      const symbol = params.symbol;
+      if (!symbol) return null;
+      return await callNSEIndia('getCommodityOptionChain', symbol);
+    }
+  };
+
+  // Try to get data from NseIndia first
+  const handler = endpointMap[endpoint];
+  if (handler) {
+    try {
+      const result = await handler();
+      if (result) return result;
+    } catch (err) {
+      console.warn(`Error calling NseIndia for ${endpoint}:`, err.message);
+    }
   }
 
-  const url = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  // Allow retrying with all available keys if needed
-  const maxRetries = options.maxRetries || keyManager.keys.length; 
-  let attempts = 0;
-  
-  while (attempts < maxRetries) {
-    const apiKey = keyManager.getCurrentKey();
-    
-    if (!apiKey) {
-      throw new Error('No valid API key available.');
-    }
-    
-    // Wait for rate limiting before making request
-    await keyManager.waitForRateLimit(apiKey);
-    
-    try {
-      console.log(`API Request (${attempts + 1}/${maxRetries}): ${url} with key ${keyManager.currentKeyIndex}`);
-      
-      // Following exact format from API examples
-      const requestOptions = {
-        method: 'GET',
-        url: `${API_URL}${url}`,
-        params,
-        headers: {
-          'X-Api-Key': apiKey,
-          ...options.headers
-        }
-      };
-      
-      const response = await axios.request(requestOptions);
-      
-      // Record successful use
-      keyManager.recordSuccessfulUse();
-      
-      return response.data;
-    } catch (error) {
-      attempts++;
-      console.error(`API Error (attempt ${attempts}/${maxRetries}):`, error.message);
-      
-      // Handle rate limit errors
-      if (error.response && error.response.status === 429) {
-        console.warn('API rate limit hit');
-        
-        // Get retry-after header or default to 5 minutes
-        const retryAfter = error.response.headers['retry-after'] 
-          ? parseInt(error.response.headers['retry-after'], 10) 
-          : 300; // 5 minutes default
-          
-        // Mark current key as rate limited
-        keyManager.markCurrentKeyRateLimited(retryAfter);
-        
-        if (attempts < maxRetries) {
-          // If we have more keys, try the next one immediately with a small delay
-          // Only use exponential backoff if we've cycled through many keys
-          const backoffDelay = attempts > keyManager.keys.length ? Math.min(1000 * Math.pow(2, attempts - keyManager.keys.length), 10000) : 100; 
-          console.log(`Switching to next key (attempt ${attempts+1}/${maxRetries})...`);
-          await new Promise(r => setTimeout(r, backoffDelay));
-          continue; // Retry with new key
-        }
-      } else {
-        // For non-rate-limit errors, increment failure counter
-        keyManager.consecutiveFailures++;
-        
-        // If we've had multiple consecutive failures, try rotating the key
-        if (keyManager.consecutiveFailures >= 2) {
-          keyManager.rotateToNextAvailableKey();
-          
-          if (attempts < maxRetries) {
-            // Small delay before retry
-            await new Promise(r => setTimeout(r, 2000));
-            continue; // Retry with new key
-          }
-        }
-      }
-      
-      // Detailed error handling
-      if (error.response) {
-        // Server responded with an error status
-        const status = error.response.status;
-        const message = error.response.data?.message || error.message;
-        
-        if (status === 429) {
-          // Check if all keys are rate limited
-          const keyStatuses = keyManager.getKeyStatuses();
-          const availableKeys = Object.values(keyStatuses).filter(s => s.isAvailable).length;
-          
-          if (availableKeys === 0) {
-            console.warn(`All API keys are rate limited. Falling back to mock data.`);
-            break; // Break the loop to reach fallback
-          } else {
-            console.warn(`API rate limit exceeded. Switching key...`);
-            continue;
-          }
-        } else if (status === 401 || status === 403) {
-          console.warn(`API authentication failed. Check your API key. (${message})`);
-          break;
-        } else if (status === 404) {
-          console.warn(`API endpoint not found: ${url} (${message})`);
-          break;
-        } else if (status >= 500) {
-          console.warn(`API server error (${status}): ${message}`);
-          // For server errors, we might want to retry, but if max retries reached, we break
-          if (attempts >= maxRetries) break;
-        } else {
-          console.warn(`API error (${status}): ${message}`);
-          break;
-        }
-      } else if (error.request) {
-        // Request was made but no response received
-        if (error.code === 'ECONNABORTED') {
-          console.warn('API request timed out. The server took too long to respond.');
-        } else if (error.code === 'ECONNREFUSED') {
-          console.warn('API connection refused. The server may be down or the URL is incorrect.');
-        } else {
-          console.warn(`Network error: ${error.message}`);
-        }
-        // For network errors, we might want to retry, but if max retries reached, we break
-        if (attempts >= maxRetries) break;
-      } else {
-        // Something happened in setting up the request
-        console.warn(`Request error: ${error.message}`);
-        break;
-      }
-    }
-  }
-  
-  console.warn(`All API attempts failed for ${endpoint}. Falling back to mock data.`);
+  // Fallback to mock data
+  console.log(`Using mock data for endpoint: ${endpoint}`);
   return getMockData(endpoint, params);
 }
 
@@ -692,8 +696,8 @@ const apiExports = {
   // Generic function
   getData,
   
-  // Key manager access for debugging
-  getKeyManager: () => keyManager,
+  // NseIndia instance access for debugging
+  getNseIndiaInstance: () => nseIndiaInstance,
   
   // Health check
   getHealthStatus,
