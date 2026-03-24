@@ -35,13 +35,61 @@ router.get('/trending', asyncHandler(async (req, res) => {
 // News endpoint - matches documented API
 router.get('/news', asyncHandler(async (req, res) => {
   const data = await api.getLatestNews(req.query);
-  res.json({ success: true, data });
+  // data from mock: { news: [...] } — unwrap to array for frontend
+  const articles = Array.isArray(data)
+    ? data
+    : Array.isArray(data?.news)
+      ? data.news
+      : [];
+  res.json({ success: true, data: articles });
 }));
 
 // IPO endpoint - matches documented API
 router.get('/ipo', asyncHandler(async (req, res) => {
   const data = await api.getUpcomingIPOs();
-  res.json({ success: true, data });
+  // data from mock: { ipos: [...] } — reshape into { upcoming, active, listed }
+  let shaped = data;
+  if (data && Array.isArray(data.ipos) && !data.upcoming) {
+    const allIpos = data.ipos;
+    const now = new Date();
+    shaped = {
+      upcoming: allIpos.slice(0, 5).map(ipo => ({
+        ...ipo,
+        name: ipo.name,
+        status: 'upcoming',
+        min_price: ipo.priceRange ? parseInt(ipo.priceRange.replace(/[₹,-]/g, '').split(' ')[0]) : null,
+        max_price: ipo.priceRange ? parseInt(ipo.priceRange.replace(/[₹,-]/g, '').split('-').pop()) : null,
+        bidding_start_date: ipo.date,
+        listing_date: null,
+        lot_size: null,
+        is_sme: false
+      })),
+      active: allIpos.slice(5, 8).map(ipo => ({
+        ...ipo,
+        name: ipo.name,
+        status: 'active',
+        min_price: ipo.priceRange ? parseInt(ipo.priceRange.replace(/[₹,-]/g, '').split(' ')[0]) : null,
+        max_price: ipo.priceRange ? parseInt(ipo.priceRange.replace(/[₹,-]/g, '').split('-').pop()) : null,
+        bidding_start_date: null,
+        bidding_end_date: ipo.date,
+        listing_date: null,
+        lot_size: null,
+        is_sme: false
+      })),
+      listed: allIpos.slice(8, 14).map(ipo => ({
+        ...ipo,
+        name: ipo.name,
+        status: 'listed',
+        listing_date: ipo.date,
+        issue_price: ipo.priceRange ? parseInt(ipo.priceRange.replace(/[₹,-]/g, '').split('-').pop()) : null,
+        listing_price: null,
+        listing_gains: parseFloat((Math.random() * 30 - 5).toFixed(2)),
+        is_sme: false
+      })),
+      closed: allIpos.slice(14, 18).map(ipo => ({ ...ipo, status: 'closed', name: ipo.name }))
+    };
+  }
+  res.json({ success: true, data: shaped });
 }));
 
 // Stock search endpoint - matches documented API

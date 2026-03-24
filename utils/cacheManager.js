@@ -375,10 +375,16 @@ const stopCleanup = () => {
 // Start cleanup automatically
 startCleanup();
 
-// Export enhanced cache manager
-module.exports = {
-  ...cacheManager,
-  startCleanup,
-  stopCleanup,
-  getStats: () => cacheManager.getStats()
-}; 
+// ============================================================
+// FIX: export the instance directly.
+// Using spread (`...cacheManager`) only copies OWN enumerable
+// properties and strips all prototype methods (generateKey,
+// get, set, delete, etc), causing:
+//   "cacheManager.generateKey is not a function"
+// Instead we attach the extra helpers onto the instance itself
+// so the full class interface is preserved.
+// ============================================================
+cacheManager.startCleanup = startCleanup;
+cacheManager.stopCleanup = stopCleanup;
+
+module.exports = cacheManager;
