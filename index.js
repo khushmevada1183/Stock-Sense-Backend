@@ -9,6 +9,7 @@ const router = express.Router();
 const { asyncHandler } = require('./utils/errorHandler');
 const api = require('./api'); // Make sure this file exists
 const cacheManager = require('./utils/cacheManager');
+const { validateStockQuery, validateHistoricalQuery } = require('./middleware/inputValidation');
 
 // Health check endpoint
 router.get('/health', asyncHandler(async (req, res) => {
@@ -93,37 +94,16 @@ router.get('/ipo', asyncHandler(async (req, res) => {
 }));
 
 // Stock search endpoint - matches documented API
-router.get('/stock', asyncHandler(async (req, res) => {
+router.get('/stock', validateStockQuery, asyncHandler(async (req, res) => {
   const { name } = req.query;
-  if (!name) {
-    return res.status(400).json({
-      success: false,
-      error: {
-        message: 'Stock name is required',
-        code: 'ERR_MISSING_NAME',
-        statusCode: 400
-      }
-    });
-  }
   
   const data = await api.searchStocks(name);
   res.json({ success: true, data });
 }));
 
 // Historical data endpoint - matches documented API
-router.get('/historical_data', asyncHandler(async (req, res) => {
+router.get('/historical_data', validateHistoricalQuery, asyncHandler(async (req, res) => {
   const { stock_name, period, filter } = req.query;
-  
-  if (!stock_name || !period || !filter) {
-    return res.status(400).json({
-      success: false,
-      error: {
-        message: 'stock_name, period, and filter are required',
-        code: 'ERR_MISSING_PARAMS',
-        statusCode: 400
-      }
-    });
-  }
   
   const data = await api.getHistoricalPrices(stock_name, period, filter);
   res.json({ success: true, data });

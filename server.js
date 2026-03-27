@@ -26,7 +26,15 @@ const PORT = process.env.PORT || 10000;
 
 // Apply middleware
 app.use(helmet()); // Security headers
-app.use(cors()); // Enable CORS
+// Configure CORS with restricted origins for production
+const corsOptions = {
+  origin: process.env.FRONTEND_URL || 'http://localhost:3001',
+  credentials: true,
+  optionsSuccessStatus: 200,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key']
+};
+app.use(cors(corsOptions)); // Enable CORS with restrictions
 app.use(express.json()); // Parse JSON request bodies
 // HTTP request logging (also forwards to live log stream)
 app.use(morgan('dev', { stream: morganStream }));

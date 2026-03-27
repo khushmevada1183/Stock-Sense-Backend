@@ -49,20 +49,23 @@ const formatErrorResponse = (error) => {
         message,
         code: `ERR_${statusCode}`,
         statusCode,
-        details: error.response?.data || null,
+        // SECURITY: Never expose error details or stack traces in production
+        details: process.env.NODE_ENV === 'development' ? error.response?.data : null,
         timestamp: new Date().toISOString()
       }
     };
   }
 
   // Handle generic errors
+  // SECURITY: Never expose stack traces or sensitive details in production
+  const isDevelopment = process.env.NODE_ENV === 'development';
   return {
     success: false,
     error: {
       message: error.message || 'An unexpected error occurred',
       code: 'ERR_UNKNOWN',
       statusCode: 500,
-      details: process.env.NODE_ENV === 'development' ? error.stack : null,
+      details: isDevelopment ? { stack: error.stack, source: error.source } : null,
       timestamp: new Date().toISOString()
     }
   };

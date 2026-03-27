@@ -148,13 +148,13 @@ export async function getIPOData() {
 
 // Legacy alias for backward compatibility
 export async function getUpcomingIPOs() {
-  console.warn('getUpcomingIPOs is deprecated. Use getIPOData() instead.');
+  logger.warn('getUpcomingIPOs is deprecated. Use getIPOData() instead.');
   return getIPOData();
 }
 
 // Legacy alias for backward compatibility  
 export async function getIPOCalendar() {
-  console.warn('getIPOCalendar is deprecated. Use getIPOData() instead.');
+  logger.warn('getIPOCalendar is deprecated. Use getIPOData() instead.');
   return getIPOData();
 }
 
@@ -240,36 +240,36 @@ export async function getMarketMovers() {
 
 // Portfolio functions - Not available in current API, return empty data
 export async function getUserPortfolios() {
-  console.warn("Portfolio API not available in the current API version");
+  logger.warn("Portfolio API not available in the current API version");
   return { portfolios: [] };
 }
 
 export async function getPortfolioDetails() {
-  console.warn("Portfolio API not available in the current API version");
+  logger.warn("Portfolio API not available in the current API version");
   return { details: {} };
 }
 
 export async function createPortfolio() {
-  console.warn("Portfolio API not available in the current API version");
+  logger.warn("Portfolio API not available in the current API version");
   return { success: false, message: "API not available" };
 }
 
 export async function updatePortfolio() {
-  console.warn("Portfolio API not available in the current API version");
+  logger.warn("Portfolio API not available in the current API version");
   return { success: false, message: "API not available" };
 }
 
 export async function deletePortfolio() {
-  console.warn("Portfolio API not available in the current API version");
+  logger.warn("Portfolio API not available in the current API version");
   return { success: false, message: "API not available" };
 }
 
 export async function getPortfolioHoldings() {
-  console.warn("Portfolio API not available in the current API version");
+  logger.warn("Portfolio API not available in the current API version");
   return { holdings: [] };
 }
 
 export async function getPortfolioSummary() {
-  console.warn("Portfolio API not available in the current API version");
+  logger.warn("Portfolio API not available in the current API version");
   return { summary: {} };
 }

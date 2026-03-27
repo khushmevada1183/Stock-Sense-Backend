@@ -53,7 +53,7 @@ try {
   const { NseIndia: NseIndiaClass } = require('stock-nse-india');
   NseIndia = NseIndiaClass;
 } catch (err) {
-  console.warn('stock-nse-india package not available:', err.message);
+  logger.warn('stock-nse-india package not available:', err.message);
   NseIndia = null;
 }
 
@@ -64,7 +64,7 @@ if (NseIndia) {
     nseIndiaInstance = new NseIndia();
     console.log('✅ stock-nse-india initialized successfully');
   } catch (err) {
-    console.warn('❌ Failed to initialize stock-nse-india:', err.message);
+    logger.warn('❌ Failed to initialize stock-nse-india:', err.message);
     nseIndiaInstance = null;
   }
 }
@@ -188,7 +188,7 @@ const CACHE_STRATEGY = {
  */
 async function callNSEIndia(methodName, ...args) {
   if (!nseIndiaInstance) {
-    console.warn(`⚠️  NseIndia not available, falling back to mock data for ${methodName}`);
+    logger.warn(`⚠️  NseIndia not available, falling back to mock data for ${methodName}`);
     return null;
   }
 
@@ -197,7 +197,7 @@ async function callNSEIndia(methodName, ...args) {
       const result = await nseIndiaInstance[methodName](...args);
       return result;
     } else {
-      console.warn(`Method ${methodName} not found on NseIndia instance`);
+      logger.warn(`Method ${methodName} not found on NseIndia instance`);
       return null;
     }
   } catch (err) {
@@ -232,7 +232,7 @@ class ApiKeyManager {
     });
     
     if (this.keys.length === 0) {
-      console.warn('No API keys found in environment variables.');
+      logger.warn('No API keys found in environment variables.');
     } else {
       console.log(`Loaded ${this.keys.length} API keys`);
     }
@@ -505,7 +505,7 @@ async function getData(endpoint, params = {}, options = {}) {
         return result;
       }
     } catch (err) {
-      console.warn(`Error calling NseIndia for ${endpoint}:`, err.message);
+      logger.warn(`Error calling NseIndia for ${endpoint}:`, err.message);
     }
   }
 
@@ -576,12 +576,12 @@ async function getIPOData() {
 
 // Legacy aliases for backward compatibility
 async function getUpcomingIPOs() {
-  console.warn('getUpcomingIPOs is deprecated. Use getIPOData() instead.');
+  logger.warn('getUpcomingIPOs is deprecated. Use getIPOData() instead.');
   return getIPOData();
 }
 
 async function getIPOCalendar() {
-  console.warn('getIPOCalendar is deprecated. Use getIPOData() instead.');
+  logger.warn('getIPOCalendar is deprecated. Use getIPOData() instead.');
   return getIPOData();
 }
 
@@ -591,7 +591,7 @@ async function getIPOCalendar() {
  * @returns {Promise<Object>} - IPO information
  */
 async function getIPODetails(ipoId) {
-  console.warn('API does not support specific IPO details by ID. Returning all IPO data.');
+  logger.warn('API does not support specific IPO details by ID. Returning all IPO data.');
   return getIPOData();
 }
 
@@ -795,28 +795,28 @@ async function getPeerComparison(symbol) {
 // Portfolio functions - these are not in the API documentation
 // Returning mock data for UI compatibility
 async function getUserPortfolios() {
-  console.warn("Portfolio API not available in the current API version");
+  logger.warn("Portfolio API not available in the current API version");
   return { portfolios: [] };
 }
 async function deletePortfolio() {
-  console.warn("Portfolio API not available in the current API version");
+  logger.warn("Portfolio API not available in the current API version");
   return { success: false, message: "API not available" };
 }
 async function createPortfolio() {
-  console.warn("Portfolio API not available in the current API version");
+  logger.warn("Portfolio API not available in the current API version");
   return { success: false, message: "API not available" };
 }
 async function updatePortfolio() {
-  console.warn("Portfolio API not available in the current API version");
+  logger.warn("Portfolio API not available in the current API version");
   return { success: false, message: "API not available" };
 }
 // Add to portfolio functions
 async function getPortfolioHoldings() {
-  console.warn("Portfolio API not available in the current API version");
+  logger.warn("Portfolio API not available in the current API version");
   return { holdings: [] };
 }
 async function getPortfolioSummary() {
-  console.warn("Portfolio API not available in the current API version");
+  logger.warn("Portfolio API not available in the current API version");
   return { summary: {} };
 }
 // Stock functions that use documented endpoints

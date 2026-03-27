@@ -111,7 +111,7 @@ class CacheManager {
     
     // Warn if cache is getting full
     if (cacheStore.size > this.maxSize * this.warningThreshold) {
-      console.warn(`Cache is ${Math.round((cacheStore.size / this.maxSize) * 100)}% full`);
+      logger.warn(`Cache is ${Math.round((cacheStore.size / this.maxSize) * 100)}% full`);
     }
   }
 

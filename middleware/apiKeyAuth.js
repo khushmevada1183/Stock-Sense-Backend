@@ -31,7 +31,7 @@ const apiKeyAuth = (req, res, next) => {
   const validApiKeys = API_CONFIG.API_KEYS;
   
   if (validApiKeys.length === 0) {
-    console.warn('No API keys configured. Allowing request without validation.');
+    logger.warn('No API keys configured. Allowing request without validation.');
     return next();
   }
 
