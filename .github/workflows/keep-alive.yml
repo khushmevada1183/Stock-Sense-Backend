@@ -1,0 +1,20 @@
+name: Keep Backend Alive
+
+on:
+  schedule:
+    # Runs every 10 minutes (* is a special character in YAML so you have to quote this string)
+    - cron: '*/10 * * * *'
+  workflow_dispatch: # Allows manual triggering from GitHub UI
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping API Health Endpoint
+        run: |
+          # Use your Render deployment URL here
+          curl -sS https://stock-sense-backend-ocjo.onrender.com/health || echo "Ping failed but continuing"
+
+          # NOTE TO USER: 
+          # Update the URL above to match your actual Render live domain if it differs!
+          # For example: curl -sS https://your-app.onrender.com/health

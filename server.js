@@ -88,10 +88,10 @@ app.use((req, res) => {
 app.use(errorMiddleware);
 
 // ── KEEP-ALIVE PINGER ──────────────────────────────────────────────────────
-// Render free tier spins down after 15 min of inactivity.
-// This pings both backend (self) and frontend every 14 min to stay awake.
-const KEEP_ALIVE_INTERVAL = 14 * 60 * 1000; // 14 minutes
-const BACKEND_SELF_URL  = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+// Free tiers spin down after 14-15 min of inactivity.
+// This pings both backend (self) and frontend every 10 min to stay awake.
+const KEEP_ALIVE_INTERVAL = 10 * 60 * 1000; // 10 minutes
+const BACKEND_SELF_URL  = process.env.EXTERNAL_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
 const FRONTEND_URL      = process.env.FRONTEND_URL || 'https://stock-sense-iota.vercel.app';
 
 function keepAlive() {
@@ -120,9 +120,9 @@ if (require.main === module) {
     console.log(`API Base URL: ${API_CONFIG.BASE_URL}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 
-    // Start keep-alive pinger (only in production on Render)
-    if (process.env.RENDER || process.env.NODE_ENV === 'production') {
-      console.log(`[Keep-Alive] Pinging every 14 min → self: ${BACKEND_SELF_URL}/health`);
+    // Start keep-alive pinger (only in production)
+    if (process.env.RENDER || process.env.EXTERNAL_URL || process.env.NODE_ENV === 'production') {
+      console.log(`[Keep-Alive] Pinging every 10 min → self: ${BACKEND_SELF_URL}/health`);
       if (FRONTEND_URL) console.log(`[Keep-Alive] Pinging frontend → ${FRONTEND_URL}/api/health`);
       setInterval(keepAlive, KEEP_ALIVE_INTERVAL);
       // First ping after 30 seconds to let server fully start
