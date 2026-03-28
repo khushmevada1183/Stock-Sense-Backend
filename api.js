@@ -46,6 +46,7 @@ if (typeof require !== 'undefined') {
 const axios = (typeof require !== 'undefined') ? require('axios') : window.axios;
 const { getMockData } = require('./utils/mockData');
 const cacheManager = require('./utils/cacheManager');
+const { logger } = require('./utils/liveLogger');
 
 // Import the stock-nse-india package for data extraction
 let NseIndia;
