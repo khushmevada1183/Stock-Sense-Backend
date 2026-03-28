@@ -36,6 +36,12 @@ class LiveLogger extends EventEmitter {
     this.keepAliveInterval.unref?.();
   }
 
+  // Compatibility methods for generic logger implementations
+  info(...args) { console.info(...args); }
+  warn(...args) { console.warn(...args); }
+  error(...args) { console.error(...args); }
+  log(...args) { console.log(...args); }
+
   // Broadcast a log line to all SSE clients
   broadcast(message, level = 'info') {
     const time = new Date().toISOString();
@@ -481,6 +487,7 @@ const liveLogger = new LiveLogger();
 
 module.exports = {
   liveLogger,
+  logger: liveLogger, // Export as logger for compatibility with api.js and inputValidation.js
   sseHandler: (...args) => liveLogger.sseHandler(...args),
   liveLogsPage: (...args) => liveLogger.htmlHandler(...args),
   morganStream: liveLogger.morganStream,
