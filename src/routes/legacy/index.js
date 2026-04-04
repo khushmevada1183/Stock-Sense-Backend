@@ -6,10 +6,11 @@
 
 const express = require('express');
 const router = express.Router();
-const { asyncHandler } = require('./utils/errorHandler');
-const api = require('./api'); // Make sure this file exists
-const cacheManager = require('./utils/cacheManager');
-const { validateStockQuery, validateHistoricalQuery } = require('./middleware/inputValidation');
+const { asyncHandler } = require('../../utils/errorHandler');
+const api = require('../../services/legacy/api');
+const cacheManager = require('../../utils/cacheManager');
+const { validateStockQuery, validateHistoricalQuery } = require('../../middleware/inputValidation');
+const portfolioRoutes = require('../../modules/portfolio/portfolio.routes');
 
 // Health check endpoint
 router.get('/health', asyncHandler(async (req, res) => {
@@ -187,31 +188,7 @@ router.get('/fetch_52_week_high_low_data', asyncHandler(async (req, res) => {
 // The /commodities endpoint has already been added above
 
 // Portfolio endpoints
-// These are not defined in the API documentation, but we'll keep a simplified mock version
-// that returns empty data to avoid breaking the UI
-router.get('/portfolio', asyncHandler(async (req, res) => {
-  res.json({ success: true, data: { portfolios: [] } });
-}));
-
-router.get('/portfolio/holdings', asyncHandler(async (req, res) => {
-  res.json({ success: true, data: { holdings: [] } });
-}));
-
-router.get('/portfolio/summary', asyncHandler(async (req, res) => {
-  res.json({ success: true, data: { summary: {} } });
-})); 
-
-router.get('/portfolio/delete', asyncHandler(async (req, res) => {
-  res.json({ success: true, data: { success: false, message: "API not available" } });
-}));
-
-router.get('/portfolio/create', asyncHandler(async (req, res) => {
-  res.json({ success: true, data: { success: false, message: "API not available" } });
-}));
-
-router.get('/portfolio/update', asyncHandler(async (req, res) => {
-  res.json({ success: true, data: { success: false, message: "API not available" } });
-}));
+router.use('/portfolio', portfolioRoutes);
 
 // Cache management endpoints (admin only)
 router.post('/admin/cache/clear', asyncHandler(async (req, res) => {
@@ -235,7 +212,7 @@ router.get('/admin/cache/stats', asyncHandler(async (req, res) => {
 // API key status endpoint for debugging
 router.get('/admin/api-keys/status', asyncHandler(async (req, res) => {
   // This should have additional authentication in production
-  const api = require('./api');
+  const api = require('../../services/legacy/api');
   res.json({ 
     success: true, 
     data: api.getKeyManager().getKeyStatuses(),
@@ -246,7 +223,7 @@ router.get('/admin/api-keys/status', asyncHandler(async (req, res) => {
 // Rate limiter status endpoint for debugging  
 router.get('/admin/rate-limit/stats', asyncHandler(async (req, res) => {
   // This should have additional authentication in production
-  const { getRateLimiterStats } = require('./middleware/rateLimitMiddleware');
+  const { getRateLimiterStats } = require('../../middleware/rateLimitMiddleware');
   res.json({ 
     success: true, 
     data: getRateLimiterStats()

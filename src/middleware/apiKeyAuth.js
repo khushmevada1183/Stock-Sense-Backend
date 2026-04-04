@@ -6,6 +6,7 @@
 
 const { ApiError } = require('../utils/errorHandler');
 const { API_CONFIG } = require('../config');
+const { logger } = require('../utils/liveLogger');
 
 /**
  * Middleware to validate API key in request headers

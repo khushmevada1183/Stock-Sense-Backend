@@ -1,42 +1,41 @@
 /**
  * API Configuration
- * 
- * This file centralizes all API configuration settings and environment variables.
+ *
+ * Centralized API settings consumed by legacy and v1 modules.
  */
-
-// Load environment variables
-require('dotenv').config();
 
 const API_CONFIG = {
   // API Base URL
   BASE_URL: process.env.NEXT_PUBLIC_INDIAN_API_URL || 'https://stock.indianapi.in',
-  
+
   // API Keys
-  API_KEYS: process.env.NEXT_PUBLIC_INDIAN_API_KEYS ? 
-    process.env.NEXT_PUBLIC_INDIAN_API_KEYS.split(',') : [],
-  
+  API_KEYS: process.env.NEXT_PUBLIC_INDIAN_API_KEYS
+    ? process.env.NEXT_PUBLIC_INDIAN_API_KEYS.split(',')
+    : [],
+
   // Default API Key (first one in the list)
-  API_KEY: process.env.NEXT_PUBLIC_INDIAN_API_KEYS ? 
-    process.env.NEXT_PUBLIC_INDIAN_API_KEYS.split(',')[0] : '',
-  
+  API_KEY: process.env.NEXT_PUBLIC_INDIAN_API_KEYS
+    ? process.env.NEXT_PUBLIC_INDIAN_API_KEYS.split(',')[0]
+    : '',
+
   // Request timeout in milliseconds
   TIMEOUT: 10000,
-  
+
   // Cache duration in milliseconds
-  CACHE_DURATION: 5 * 60 * 1000, // 5 minutes
-  
+  CACHE_DURATION: 5 * 60 * 1000,
+
   // Number of retry attempts for failed requests
   RETRY_ATTEMPTS: 3,
-  
+
   // API Key Rotation Configuration
   KEY_ROTATION: {
     ENABLED: true,
-    AUTO_ROTATE_ON_429: true, // Rotate on rate limit errors
-    MAX_CONSECUTIVE_FAILURES: 2, // Rotate after 2 consecutive failures
-    RETRY_DELAY: 1000, // Delay in ms before retrying with a new key
-    ROTATION_INTERVAL: 24 * 60 * 60 * 1000, // 24 hours - regular rotation interval
+    AUTO_ROTATE_ON_429: true,
+    MAX_CONSECUTIVE_FAILURES: 2,
+    RETRY_DELAY: 1000,
+    ROTATION_INTERVAL: 24 * 60 * 60 * 1000,
   },
-  
+
   // Endpoints
   ENDPOINTS: {
     HEALTH: '/health',
@@ -60,8 +59,10 @@ const API_CONFIG = {
     IPO_CALENDAR: '/stocks/ipo/calendar',
     IPO_DETAILS: '/stocks/ipo/:ipoId',
     MARKET_MOVERS: '/stocks/market/most-active',
-    PEER_COMPARISON: '/stocks/:symbol/peers'
-  }
+    PEER_COMPARISON: '/stocks/:symbol/peers',
+  },
 };
 
-module.exports = { API_CONFIG }; 
+module.exports = {
+  API_CONFIG,
+};

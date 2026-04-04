@@ -11,14 +11,21 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
-const { morganStream, patchConsole, liveLogsPage, sseHandler } = require('./utils/liveLogger');
-const { errorMiddleware } = require('./utils/errorHandler');
-const apiKeyAuth = require('./middleware/apiKeyAuth');
-const { rateLimitMiddleware } = require('./middleware/rateLimitMiddleware');
-const { API_CONFIG } = require('./config');
+const swaggerUi = require('swagger-ui-express');
+const { morganStream, patchConsole, liveLogsPage, sseHandler } = require('./src/utils/liveLogger');
+const { errorMiddleware } = require('./src/utils/errorHandler');
+const { rateLimitMiddleware } = require('./src/middleware/rateLimitMiddleware');
+const { API_CONFIG } = require('./src/config');
+const { openApiSpec } = require('./src/docs/openapi');
+const v1Routes = require('./src/routes/v1');
+const { checkConnection, closePool } = require('./src/db/client');
+const {
+  startMarketSyncScheduler,
+  stopMarketSyncScheduler,
+} = require('./src/jobs/marketSyncScheduler');
 
-// Import API routes - ensure this is a router
-const apiRoutes = require('./index');
+// Import legacy API routes from src
+const apiRoutes = require('./src/routes/legacy');
 
 // Create Express app
 const app = express();
@@ -66,8 +73,15 @@ app.get('/health', (req, res) => {
 app.get('/live-logs', liveLogsPage);
 app.get('/live-logs/stream', sseHandler);
 
+// API documentation
+app.get('/openapi.json', (req, res) => {
+  res.status(200).json(openApiSpec);
+});
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openApiSpec, { explorer: true }));
+
 // API routes - ensure apiRoutes is a router
 // API routes
+app.use('/api/v1', v1Routes);
 app.use('/api', apiRoutes);
 
 // 404 handler
@@ -112,12 +126,49 @@ function keepAlive() {
   });
 }
 
+async function shutdown(signal) {
+  console.log(`[Shutdown] Received ${signal}. Closing database connections...`);
+  try {
+    stopMarketSyncScheduler();
+    await closePool();
+    console.log('[Shutdown] Database pool closed.');
+  } catch (error) {
+    console.error(`[Shutdown] Failed to close database pool: ${error.message}`);
+  } finally {
+    process.exit(0);
+  }
+}
+
 // Start server
 if (require.main === module) {
+  ['SIGINT', 'SIGTERM'].forEach((signal) => {
+    process.on(signal, () => {
+      shutdown(signal);
+    });
+  });
+
   app.listen(PORT, () => {
     console.log(`Indian Stock API Server running on port ${PORT}`);
     console.log(`API Base URL: ${API_CONFIG.BASE_URL}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+
+    checkConnection()
+      .then((result) => {
+        console.log(`[DB] Postgres connection ready (${result.latencyMs}ms)`);
+      })
+      .catch((error) => {
+        console.error(`[DB] Connection check failed: ${error.message}`);
+      });
+
+    const marketSyncStatus = startMarketSyncScheduler();
+    if (marketSyncStatus.enabled) {
+      console.log(
+        `[MARKET_SYNC] Enabled with interval=${marketSyncStatus.intervalMs}ms ` +
+        `runOnStart=${marketSyncStatus.runOnStart}`
+      );
+    } else {
+      console.log('[MARKET_SYNC] Disabled (set MARKET_SYNC_ENABLED=true to enable).');
+    }
 
     // Start keep-alive pinger (only in production)
     if (process.env.RENDER || process.env.EXTERNAL_URL || process.env.NODE_ENV === 'production') {

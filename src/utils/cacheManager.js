@@ -6,6 +6,7 @@
  */
 
 const { API_CONFIG } = require('../config');
+const { logger } = require('./liveLogger');
 
 // In-memory cache store with enhanced capabilities
 const cacheStore = new Map();

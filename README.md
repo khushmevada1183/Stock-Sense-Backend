@@ -11,6 +11,7 @@ A robust API for accessing Indian stock market data, company information, and fi
 - **Historical Data**: Access historical price data with various time ranges
 - **Caching System**: Efficient caching to reduce API calls and improve performance
 - **API Key Rotation**: Automatic rotation of API keys to prevent rate limiting
+- **Neon Postgres + TimescaleDB (v1)**: Versioned data layer for durable time-series stock storage
 
 ## Installation
 
@@ -31,6 +32,15 @@ cp .env.example .env
 Create a `.env` file with the following variables:
 
 ```
+PORT=10000
+NODE_ENV=development
+DATABASE_URL=postgresql://user:password@host/dbname?sslmode=require
+PG_POOL_MAX=15
+PG_IDLE_TIMEOUT_MS=30000
+PG_CONNECTION_TIMEOUT_MS=10000
+PG_QUERY_TIMEOUT_MS=15000
+PG_STATEMENT_TIMEOUT_MS=15000
+PG_APP_NAME=stock-sense-backend
 NEXT_PUBLIC_INDIAN_API_URL=https://stock.indianapi.in
 NEXT_PUBLIC_INDIAN_API_KEYS=your-api-key-1,your-api-key-2,your-api-key-3
 JWT_SECRET=your-jwt-secret
@@ -39,6 +49,12 @@ JWT_SECRET=your-jwt-secret
 ## Running the API
 
 ```bash
+# Apply DB migrations first (Timescale + tables)
+npm run db:migrate
+
+# Optional readiness check for DB/Timescale
+npm run db:check
+
 # Development mode
 npm run dev
 
@@ -46,9 +62,15 @@ npm run dev
 npm start
 ```
 
-The API will be available at `http://localhost:3001`.
+The API will be available at `http://localhost:10000`.
 
 ## API Endpoints
+
+### V1 Postgres/Timescale Endpoints
+- `GET /api/v1/health` - V1 service health
+- `GET /api/v1/health/db` - DB + Timescale readiness
+- `POST /api/v1/stocks/:symbol/ticks` - Upsert OHLCV ticks/candles into Timescale
+- `GET /api/v1/stocks/:symbol/ticks?from=<iso>&to=<iso>&limit=<n>` - Query recent ticks
 
 ### Health Check
 - `GET /api/health` - Check server status
@@ -147,16 +169,16 @@ To prevent rate limiting, the API automatically rotates through multiple API key
 
 ```
 api/
-├── config/
-│   └── index.js           # Configuration settings
-├── middleware/
-│   └── apiKeyAuth.js      # API key authentication
-├── utils/
-│   ├── errorHandler.js    # Error handling utilities
-│   └── cacheManager.js    # Cache management
-├── api.js                 # API client for external API
-├── index.js               # API routes
-├── server.js              # Express server setup
+├── src/
+│   ├── config/            # Environment and DB config
+│   ├── db/                # PG pool, migration runner, SQL migrations
+│   ├── middleware/        # Request auth/validation/rate-limit middleware
+│   ├── modules/           # Feature modules (health, stocks/ticks)
+│   ├── routes/v1/         # Versioned API routes
+│   ├── shared/            # Shared middleware/helpers
+│   └── utils/             # Logging, cache, error, mock utilities
+├── index.js               # Existing API routes
+├── server.js              # Express server setup (mounts /api and /api/v1)
 └── README.md              # This documentation
 ```
 
