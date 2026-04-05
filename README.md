@@ -44,6 +44,33 @@ PG_APP_NAME=stock-sense-backend
 NEXT_PUBLIC_INDIAN_API_URL=https://stock.indianapi.in
 NEXT_PUBLIC_INDIAN_API_KEYS=your-api-key-1,your-api-key-2,your-api-key-3
 JWT_SECRET=your-jwt-secret
+CACHE_ENABLED=true
+CACHE_MAX_SIZE=10000
+CACHE_REDIS_ENABLED=false
+REDIS_URL=redis://localhost:6379
+CACHE_REDIS_NAMESPACE=stock_sense_backend
+REDIS_CONNECT_TIMEOUT_MS=3000
+ALERT_EVALUATOR_ENABLED=true
+ALERT_EVALUATOR_INTERVAL_MS=30000
+ALERT_EVALUATOR_RUN_ON_START=true
+ALERT_EVALUATOR_MARKET_HOURS_ONLY=true
+ALERT_EVALUATOR_FORCE_RUN=false
+ALERT_EVALUATOR_COOLDOWN_SECONDS=300
+ALERT_MARKET_TIMEZONE=Asia/Kolkata
+ALERT_MARKET_OPEN_HHMM=0915
+ALERT_MARKET_CLOSE_HHMM=1530
+ALERT_MARKET_WEEKDAYS=1,2,3,4,5
+NOTIFICATION_DELIVERY_ENABLED=true
+NOTIFICATION_DELIVERY_INTERVAL_MS=30000
+NOTIFICATION_DELIVERY_RUN_ON_START=true
+NOTIFICATION_DELIVERY_BATCH_SIZE=50
+NOTIFICATION_EMAIL_MODE=mock
+NOTIFICATION_EMAIL_WEBHOOK_URL=
+NOTIFICATION_PUSH_MODE=mock
+NOTIFICATION_PUSH_WEBHOOK_URL=
+IPO_SUBSCRIPTION_SYNC_INTERVAL_MS=3600000
+IPO_GMP_SYNC_INTERVAL_MS=3600000
+FII_DII_SYNC_INTERVAL_MS=86400000
 ```
 
 ## Running the API
@@ -54,6 +81,39 @@ npm run db:migrate
 
 # Optional readiness check for DB/Timescale
 npm run db:check
+
+# Optional one-time alert evaluation run
+npm run alerts:evaluate
+
+# Optional continuous alert evaluation (30s cadence)
+npm run alerts:evaluate:watch
+
+# Optional one-time notification delivery processing
+npm run notifications:process
+
+# Optional continuous notification delivery processing
+npm run notifications:process:watch
+
+# Optional IPO calendar seed (upsert)
+npm run ipo:seed
+
+# Optional one-time IPO subscription scraper sync
+npm run ipo:subscriptions:sync
+
+# Optional continuous IPO subscription scraper sync
+npm run ipo:subscriptions:watch
+
+# Optional one-time IPO GMP scraper sync
+npm run ipo:gmp:sync
+
+# Optional continuous IPO GMP scraper sync
+npm run ipo:gmp:watch
+
+# Optional one-time FII/DII scraper sync
+npm run institutional:fii-dii:sync
+
+# Optional continuous FII/DII scraper sync
+npm run institutional:fii-dii:watch
 
 # Development mode
 npm run dev
@@ -71,6 +131,10 @@ The API will be available at `http://localhost:10000`.
 - `GET /api/v1/health/db` - DB + Timescale readiness
 - `POST /api/v1/stocks/:symbol/ticks` - Upsert OHLCV ticks/candles into Timescale
 - `GET /api/v1/stocks/:symbol/ticks?from=<iso>&to=<iso>&limit=<n>` - Query recent ticks
+- `GET /api/v1/institutional/fii-dii?segment=<equity|debt|hybrid>&limit=<n>` - Latest FII/DII daily flow summary
+- `GET /api/v1/institutional/fii-dii/history?from=<yyyy-mm-dd>&to=<yyyy-mm-dd>&segment=<equity|debt|hybrid>&limit=<n>` - Historical FII/DII rows
+- `GET /api/v1/institutional/fii-dii/cumulative?range=<monthly|yearly>&segment=<equity|debt|hybrid>&limit=<n>` - Cumulative net flows
+- `POST /api/v1/institutional/fii-dii/sync` - Trigger FII/DII scraper sync run
 
 ### Health Check
 - `GET /api/health` - Check server status

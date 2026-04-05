@@ -45,6 +45,44 @@ This document merges both source plans into one operationally usable phase-wise 
 - Delivery control: Each sprint/milestone should map to both a Source A phase and Source B requirement IDs.
 - Completion rule per phase: Mark phase done only after associated requirement acceptance criteria are demonstrably met.
 
+## Live Execution Status (Updated 2026-04-05)
+
+Legend:
+- [x] Completed
+- [ ] Pending
+
+### Current Phase Completion State
+
+- [ ] Phase 0 complete
+- [ ] Phase 1 complete
+- [ ] Phase 2 complete
+
+### Recently Completed (Backend)
+
+- [x] Portfolio user isolation via JWT auth context
+- [x] Portfolio CSV export endpoint
+- [x] Portfolio route-based holdings and summary endpoints
+- [x] Watchlist CRUD with reordering
+- [x] Price alert CRUD foundation (all 6 alert types)
+- [x] OpenAPI/Swagger updates for new endpoints with visual verification
+- [x] TimescaleDB candle aggregate views (1m/5m/15m/1d) + stock history API
+- [x] Cache-aside layer for market snapshots + stock ticks/history with TTL and invalidation
+- [x] GitHub Actions CI workflow for lint + test on pull requests
+- [x] External Redis cache wiring with automatic in-memory fallback
+- [x] Alert evaluator background job with 30s cadence during market hours
+- [x] Notification delivery pipeline (email + push) with outbox, scheduler, and provider fallback modes
+- [x] IPO calendar seeding and v1 APIs backed by Postgres
+- [x] IPO subscription data scraper with v1 subscription APIs
+- [x] GMP tracking with v1 APIs and sync job
+- [x] FII/DII daily data scraper with institutional APIs and sync job
+
+### Immediate Pending (Next Plan Targets)
+
+- [ ] Phase 0 Docker Compose stack (TimescaleDB, Redis, Kafka, Elasticsearch) (deferred for now)
+- [ ] Phase 0 Kafka topics creation (deferred for now)
+- [ ] Phase 0 Timescale upgrade for true continuous aggregate policies (currently using materialized aggregate views)
+- [ ] Phase 3 block deals scraper (NSE/BSE data)
+
 ## Verbatim Source A Phase Roadmap
 
 ## 13. 2-YEAR PHASE ROADMAP — STEP BY STEP
@@ -59,37 +97,37 @@ This document merges both source plans into one operationally usable phase-wise 
 
 **Week 1: Development Environment**
 - [ ] Initialize monorepo with Turborepo
-- [ ] Set up Docker Compose (TimescaleDB, Redis, Kafka, Elasticsearch)
+- [ ] Set up Docker Compose (TimescaleDB, Redis, Kafka, Elasticsearch) (deferred for now)
 - [ ] Configure TypeScript, ESLint, Prettier across all apps
-- [ ] Set up GitHub Actions CI (lint + test on every PR)
-- [ ] Create all database migration files (V001 to V013)
+- [x] Set up GitHub Actions CI (lint + test on every PR)
+- [x] Create all database migration files (V001 to V013)
 - [ ] Seed stocks_master with all 2000+ NSE-listed stocks
 - [ ] Set up Flyway for migration management
 
 **Week 2: Auth System**
-- [ ] Implement users, user_sessions tables
-- [ ] JWT auth (access + refresh token pair)
-- [ ] Google OAuth integration
+- [x] Implement users, user_sessions tables
+- [x] JWT auth (access + refresh token pair)
+- [x] Google OAuth integration
 - [ ] Email OTP verification (AWS SES)
-- [ ] Password hashing (bcrypt)
-- [ ] Rate limiting middleware
-- [ ] Auth APIs: register, login, logout, refresh, forgot-password
+- [x] Password hashing (bcrypt)
+- [x] Rate limiting middleware
+- [x] Auth APIs: register, login, logout, refresh, forgot-password
 
 **Week 3: Core Data Pipeline**
 - [ ] NSE REST API integration for end-of-day data
 - [ ] Data ingestion worker (Python Celery)
 - [ ] Populate stock_prices with 5 years of historical data
-- [ ] Set up TimescaleDB continuous aggregates (1min, 5min, 15min, 1day)
-- [ ] Redis caching layer setup
-- [ ] Kafka topics creation
+- [x] Set up TimescaleDB aggregate candle views (1min, 5min, 15min, 1day) (continuous policies deferred by current license)
+- [x] Redis caching layer setup (external Redis enabled with automatic in-memory fallback)
+- [ ] Kafka topics creation (deferred for now)
 
 **Week 4: API Foundation**
-- [ ] Express.js server with all middleware
+- [x] Express.js server with all middleware
 - [ ] Response builder utility (standard API response format)
-- [ ] Error handler middleware
+- [x] Error handler middleware
 - [ ] Pagination utility
 - [ ] Logging (Winston + ELK)
-- [ ] API documentation (Swagger/OpenAPI)
+- [x] API documentation (Swagger/OpenAPI)
 - [ ] Deploy to staging (AWS ECS or single EC2)
 
 ---
@@ -102,7 +140,7 @@ This document merges both source plans into one operationally usable phase-wise 
 - [ ] GET /stocks/search (Elasticsearch full-text)
 - [ ] GET /stocks/:symbol (full profile)
 - [ ] GET /stocks/:symbol/quote (live price from Redis)
-- [ ] GET /stocks/:symbol/history (from TimescaleDB continuous aggregates)
+- [x] GET /stocks/:symbol/history (from TimescaleDB aggregate views with hypertable fallback)
 
 **Month 2, Week 3-4: Technical Analysis**
 - [ ] Implement all 15+ technical indicators in Node.js (using `technicalindicators` library)
@@ -132,30 +170,30 @@ This document merges both source plans into one operationally usable phase-wise 
 #### PHASE 2: User Features (Months 4-5)
 
 **Month 4: Portfolio Management**
-- [ ] Portfolio CRUD APIs
-- [ ] Transaction recording (buy/sell)
+- [x] Portfolio CRUD APIs
+- [x] Transaction recording (buy/sell)
 - [ ] FIFO cost basis computation
-- [ ] Live P&L calculation
+- [x] Live P&L calculation
 - [ ] XIRR service implementation
-- [ ] Sector allocation analytics
-- [ ] Portfolio export (CSV)
+- [x] Sector allocation analytics
+- [x] Portfolio export (CSV)
 - [ ] Portfolio performance charts data
 
 **Month 5: Watchlists, Alerts, IPO**
-- [ ] Watchlist CRUD with reordering
-- [ ] Price alert system (all 6 alert types)
-- [ ] Alert evaluator background job (runs every 30s in market hours)
-- [ ] Push notifications (Firebase FCM) for triggered alerts
-- [ ] Email notifications (AWS SES)
-- [ ] IPO calendar seeding and APIs
-- [ ] IPO subscription data scraper
-- [ ] GMP tracking
+- [x] Watchlist CRUD with reordering
+- [x] Price alert system (all 6 alert types)
+- [x] Alert evaluator background job (runs every 30s in market hours)
+- [x] Push notifications (FCM-compatible pipeline with webhook/mock fallback)
+- [x] Email notifications (SES-compatible pipeline with webhook/mock fallback)
+- [x] IPO calendar seeding and APIs
+- [x] IPO subscription data scraper
+- [x] GMP tracking
 
 ---
 
 #### PHASE 3: Institutional & Advanced Data (Month 6)
 
-- [ ] FII/DII daily data scraper and APIs
+- [x] FII/DII daily data scraper and APIs
 - [ ] Block deals scraper (NSE/BSE data)
 - [ ] Mutual fund holdings data pipeline (SEBI monthly data)
 - [ ] Insider trading data ingestion

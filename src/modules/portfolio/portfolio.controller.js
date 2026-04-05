@@ -1,7 +1,6 @@
 const asyncHandler = require('../../shared/middleware/asyncHandler');
 const { ApiError } = require('../../utils/errorHandler');
 const {
-  normalizeUserId,
   normalizePortfolioId,
   normalizePortfolioCreatePayload,
   normalizePortfolioUpdatePayload,
@@ -19,8 +18,74 @@ const {
   createPortfolioTransaction,
 } = require('./portfolio.service');
 
+const csvEscape = (value) => {
+  if (value === null || value === undefined) {
+    return '';
+  }
+
+  const raw = typeof value === 'object' ? JSON.stringify(value) : String(value);
+  if (/[",\n]/.test(raw)) {
+    return `"${raw.replace(/"/g, '""')}"`;
+  }
+
+  return raw;
+};
+
+const csvLine = (columns) => columns.map(csvEscape).join(',');
+
+const buildPortfolioExportCsv = ({ holdings, summary }) => {
+  const holdingHeader = [
+    'symbol',
+    'quantity',
+    'buyPrice',
+    'lastPrice',
+    'change',
+    'changePercent',
+    'marketValue',
+    'profitLoss',
+    'profitLossPercent',
+    'realizedPnl',
+    'buyDate',
+  ];
+
+  const holdingRows = holdings.map((holding) =>
+    csvLine([
+      holding.symbol,
+      holding.quantity,
+      holding.buyPrice,
+      holding.lastPrice,
+      holding.change,
+      holding.changePercent,
+      holding.marketValue,
+      holding.profitLoss,
+      holding.profitLossPercent,
+      holding.realizedPnl,
+      holding.buyDate,
+    ])
+  );
+
+  const summaryRows = Object.entries(summary || {}).map(([metric, value]) =>
+    csvLine([metric, value])
+  );
+
+  return [
+    csvLine(holdingHeader),
+    ...holdingRows,
+    '',
+    csvLine(['metric', 'value']),
+    ...summaryRows,
+    '',
+  ].join('\n');
+};
+
 const getUserIdFromRequest = (req) => {
-  return normalizeUserId(req.query.userId || req.body?.userId || req.headers['x-user-id']);
+  const userId = req.auth?.userId;
+
+  if (!userId) {
+    throw new ApiError('Authentication required', 401, 'ERR_UNAUTHORIZED');
+  }
+
+  return String(userId);
 };
 
 const listPortfolios = asyncHandler(async (req, res) => {
@@ -109,7 +174,7 @@ const removePortfolio = asyncHandler(async (req, res) => {
 
 const getHoldings = asyncHandler(async (req, res) => {
   const { userId, portfolioId } = normalizeHoldingsQuery({
-    userId: req.query.userId || req.body?.userId || req.headers['x-user-id'],
+    userId: getUserIdFromRequest(req),
     portfolioId: req.query.portfolioId,
   });
 
@@ -125,7 +190,7 @@ const getHoldings = asyncHandler(async (req, res) => {
 
 const getSummary = asyncHandler(async (req, res) => {
   const { userId, portfolioId } = normalizeHoldingsQuery({
-    userId: req.query.userId || req.body?.userId || req.headers['x-user-id'],
+    userId: getUserIdFromRequest(req),
     portfolioId: req.query.portfolioId,
   });
 
@@ -137,6 +202,76 @@ const getSummary = asyncHandler(async (req, res) => {
       summary,
     },
   });
+});
+
+const getPortfolioHoldings = asyncHandler(async (req, res) => {
+  const userId = getUserIdFromRequest(req);
+  const portfolioId = normalizePortfolioId(req.params.portfolioId);
+
+  const details = await getUserPortfolioDetails(userId, portfolioId);
+
+  if (!details) {
+    throw new ApiError('Portfolio not found', 404, 'ERR_PORTFOLIO_NOT_FOUND');
+  }
+
+  res.status(200).json({
+    success: true,
+    data: {
+      holdings: details.holdings,
+    },
+  });
+});
+
+const getPortfolioSummary = asyncHandler(async (req, res) => {
+  const userId = getUserIdFromRequest(req);
+  const portfolioId = normalizePortfolioId(req.params.portfolioId);
+
+  const details = await getUserPortfolioDetails(userId, portfolioId);
+
+  if (!details) {
+    throw new ApiError('Portfolio not found', 404, 'ERR_PORTFOLIO_NOT_FOUND');
+  }
+
+  res.status(200).json({
+    success: true,
+    data: {
+      summary: details.summary,
+    },
+  });
+});
+
+const exportPortfolioCsv = asyncHandler(async (req, res) => {
+  const { userId, portfolioId } = normalizeHoldingsQuery({
+    userId: getUserIdFromRequest(req),
+    portfolioId: req.query.portfolioId,
+  });
+
+  let holdings;
+  let summary;
+
+  if (portfolioId) {
+    const details = await getUserPortfolioDetails(userId, portfolioId);
+
+    if (!details) {
+      throw new ApiError('Portfolio not found', 404, 'ERR_PORTFOLIO_NOT_FOUND');
+    }
+
+    holdings = details.holdings;
+    summary = details.summary;
+  } else {
+    holdings = await getUserPortfolioHoldings(userId);
+    summary = await getUserPortfolioSummary(userId);
+  }
+
+  const csvPayload = buildPortfolioExportCsv({ holdings, summary });
+  const datePart = new Date().toISOString().slice(0, 10);
+  const scope = portfolioId ? `portfolio-${portfolioId}` : 'all-portfolios';
+  const filename = `${scope}-${datePart}.csv`;
+
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+  return res.status(200).send(csvPayload);
 });
 
 const addTransaction = asyncHandler(async (req, res) => {
@@ -170,5 +305,8 @@ module.exports = {
   removePortfolio,
   getHoldings,
   getSummary,
+  getPortfolioHoldings,
+  getPortfolioSummary,
+  exportPortfolioCsv,
   addTransaction,
 };

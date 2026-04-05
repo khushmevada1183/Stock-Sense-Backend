@@ -3,7 +3,7 @@ const { ApiError } = require('../../utils/errorHandler');
 const SYMBOL_REGEX = /^[A-Z0-9.&_-]{1,20}$/;
 
 const normalizeUserId = (rawUserId) => {
-  const userId = String(rawUserId || '1').trim();
+  const userId = String(rawUserId || '').trim();
   if (!userId) {
     throw new ApiError('userId is required', 400, 'ERR_INVALID_USER_ID');
   }

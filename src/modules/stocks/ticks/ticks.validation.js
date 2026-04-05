@@ -3,6 +3,8 @@ const { ApiError } = require('../../../utils/errorHandler');
 const DEFAULT_LIMIT = 200;
 const MAX_LIMIT = 1000;
 const MAX_BATCH_SIZE = 2000;
+const DEFAULT_HISTORY_BUCKET = '1d';
+const ALLOWED_HISTORY_BUCKETS = new Set(['1m', '5m', '15m', '1d']);
 
 const assertSymbol = (rawSymbol) => {
   const symbol = String(rawSymbol || '').trim().toUpperCase();
@@ -143,7 +145,28 @@ const normalizeTicksQuery = (rawSymbol, query) => {
   };
 };
 
+const parseBucket = (value) => {
+  const bucket = String(value || DEFAULT_HISTORY_BUCKET).trim().toLowerCase();
+
+  if (!ALLOWED_HISTORY_BUCKETS.has(bucket)) {
+    throw new ApiError('bucket must be one of 1m, 5m, 15m, 1d', 400, 'ERR_INVALID_BUCKET');
+  }
+
+  return bucket;
+};
+
+const normalizeHistoryQuery = (rawSymbol, query) => {
+  const base = normalizeTicksQuery(rawSymbol, query);
+  const bucket = parseBucket(query.bucket);
+
+  return {
+    ...base,
+    bucket,
+  };
+};
+
 module.exports = {
   normalizeIngestPayload,
   normalizeTicksQuery,
+  normalizeHistoryQuery,
 };

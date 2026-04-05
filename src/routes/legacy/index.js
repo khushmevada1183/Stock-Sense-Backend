@@ -193,7 +193,7 @@ router.use('/portfolio', portfolioRoutes);
 // Cache management endpoints (admin only)
 router.post('/admin/cache/clear', asyncHandler(async (req, res) => {
   // This should have additional authentication
-  cacheManager.clear();
+  await cacheManager.clearAsync();
   res.json({ 
     success: true, 
     message: 'Cache cleared successfully',

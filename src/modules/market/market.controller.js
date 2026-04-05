@@ -17,6 +17,7 @@ const syncSnapshot = asyncHandler(async (req, res) => {
 
 const getLatest = asyncHandler(async (req, res) => {
   const snapshot = await getLatestSnapshot();
+  res.setHeader('Cache-Control', 'public, max-age=30');
 
   res.status(200).json({
     success: true,
@@ -66,6 +67,7 @@ const getStatus = asyncHandler(async (req, res) => {
 
 const getHistory = asyncHandler(async (req, res) => {
   const snapshots = await getSnapshotHistory(req.query);
+  res.setHeader('Cache-Control', 'public, max-age=30');
 
   res.status(200).json({
     success: true,

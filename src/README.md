@@ -30,9 +30,18 @@ src/
       008_add_user_role_claims.sql
       009_create_oauth_identities.sql
       010_create_auth_audit_logs.sql
+      011_create_watchlists.sql
+      012_create_price_alerts.sql
+      013_create_stock_candles_continuous_aggregates.sql
+      014_create_notification_delivery.sql
+      015_create_ipo_calendar.sql
+      016_create_ipo_subscription_snapshots.sql
+      017_create_ipo_gmp_snapshots.sql
+      018_create_fii_dii_activity.sql
   jobs/
     marketSyncScheduler.js # In-process recurring market sync runtime state
     syncMarketSnapshots.js # CLI runner for one-time/watch market sync
+    syncFiiDiiFlows.js      # CLI runner for one-time/watch FII/DII flow sync
   middleware/
     apiKeyAuth.js         # API key validation middleware
     inputValidation.js    # Query/input sanitization middleware
@@ -60,6 +69,24 @@ src/
       portfolio.service.js
       portfolio.repository.js
       portfolio.validation.js
+    watchlists/
+      watchlists.routes.js
+      watchlists.controller.js
+      watchlists.service.js
+      watchlists.repository.js
+      watchlists.validation.js
+    alerts/
+      alerts.routes.js
+      alerts.controller.js
+      alerts.service.js
+      alerts.repository.js
+      alerts.validation.js
+    institutional/
+      institutional.routes.js
+      institutional.controller.js
+      institutional.service.js
+      institutional.repository.js
+      institutional.validation.js
     stocks/
       ticks/
         ticks.routes.js
@@ -91,6 +118,9 @@ src/
 ## API Base
 
 All new endpoints are mounted under `/api/v1`.
+
+Portfolio endpoints under `/api/v1/portfolios` require `Authorization: Bearer <access_token>`.
+User scope is derived from JWT claims (no `userId` query/body/header override).
 
 ## API Docs
 
@@ -135,12 +165,88 @@ All new endpoints are mounted under `/api/v1`.
 - `GET /api/v1/market/snapshot/history` to fetch snapshot history.
 - `GET /api/v1/market/snapshot/status` to inspect scheduler and freshness status.
 
+## Portfolio Endpoints
+
+- `GET /api/v1/portfolios/export?portfolioId=<uuid>` to export holdings/summary CSV (portfolioId optional).
+- `GET /api/v1/portfolios/:portfolioId/holdings` to fetch holdings for a single portfolio.
+- `GET /api/v1/portfolios/:portfolioId/summary` to fetch summary metrics for a single portfolio.
+
+## Watchlist Endpoints
+
+- `GET /api/v1/watchlists` list current user's watchlists.
+- `POST /api/v1/watchlists` create a watchlist.
+- `GET /api/v1/watchlists/:watchlistId` get one watchlist with ordered items.
+- `PATCH /api/v1/watchlists/:watchlistId` update watchlist metadata.
+- `DELETE /api/v1/watchlists/:watchlistId` delete watchlist.
+- `POST /api/v1/watchlists/:watchlistId/items` add symbol to watchlist.
+- `DELETE /api/v1/watchlists/:watchlistId/items/:itemId` remove one symbol from watchlist.
+- `PATCH /api/v1/watchlists/:watchlistId/items/reorder` reorder watchlist items.
+
+## Alert Endpoints
+
+- `GET /api/v1/alerts` list current user's alerts (supports `symbol` and `isActive` filters).
+- `GET /api/v1/alerts/evaluator/status` returns alert evaluator scheduler runtime status.
+- `POST /api/v1/alerts` create a price alert.
+- `GET /api/v1/alerts/:alertId` get one alert.
+- `PATCH /api/v1/alerts/:alertId` update one alert.
+- `DELETE /api/v1/alerts/:alertId` delete one alert.
+
+## Notification Endpoints
+
+- `GET /api/v1/notifications` list current user's notification delivery history.
+- `GET /api/v1/notifications/delivery/status` returns notification delivery scheduler runtime status.
+- `GET /api/v1/notifications/push-devices` list registered push devices for current user.
+- `POST /api/v1/notifications/push-devices` register/re-activate a push device token.
+- `DELETE /api/v1/notifications/push-devices/:deviceId` deactivate a push device token.
+
+## IPO Endpoints
+
+- `GET /api/v1/ipo/calendar` get seeded IPO calendar data (supports `status`, `from`, `to`, `grouped`, `limit`).
+- `GET /api/v1/ipo/:ipoId` get one IPO entry by id.
+- `GET /api/v1/ipo/subscriptions/latest` get latest subscription snapshot for each IPO.
+- `GET /api/v1/ipo/:ipoId/subscription` get latest and historical subscription snapshots for a single IPO.
+- `POST /api/v1/ipo/subscriptions/sync` trigger scraper sync run (API key protected when keys are configured).
+- `GET /api/v1/ipo/gmp/latest` get latest GMP snapshot for each IPO.
+- `GET /api/v1/ipo/:ipoId/gmp` get latest and historical GMP snapshots for a single IPO.
+- `POST /api/v1/ipo/gmp/sync` trigger GMP scraper sync run (API key protected when keys are configured).
+
+## Institutional Endpoints
+
+- `GET /api/v1/institutional/fii-dii` get latest daily FII/DII flow summary (`segment`, `limit` supported).
+- `GET /api/v1/institutional/fii-dii/history` get historical activity rows (`from`, `to`, `segment`, `limit` supported).
+- `GET /api/v1/institutional/fii-dii/cumulative` get monthly/yearly cumulative net flows (`range`, `segment`, `limit` supported).
+- `POST /api/v1/institutional/fii-dii/sync` trigger FII/DII scraper sync run (API key protected when keys are configured).
+
+## Stock Endpoints
+
+- `POST /api/v1/stocks/:symbol/ticks` ingest/upsert raw ticks.
+- `GET /api/v1/stocks/:symbol/ticks` list raw ticks from hypertable.
+- `GET /api/v1/stocks/:symbol/history?bucket=1m|5m|15m|1d` list OHLCV candles.
+  - Uses Timescale materialized aggregate views when available.
+  - Falls back to hypertable aggregation if views are missing or not yet materialized.
+
 ## Scripts
 
 - `npm run db:migrate` to apply migrations.
 - `npm run db:check` to verify DB and Timescale readiness.
 - `npm run market:sync` to fetch and persist one market snapshot.
 - `npm run market:sync:watch` to keep market snapshots updated continuously.
+- `npm run alerts:evaluate` to run one alert evaluator pass.
+- `npm run alerts:evaluate:watch` to keep evaluating alerts on interval.
+- `npm run notifications:process` to process queued notification deliveries once.
+- `npm run notifications:process:watch` to keep processing queued deliveries on interval.
+- `npm run notifications:smoke` to run end-to-end notification delivery smoke test.
+- `npm run ipo:seed` to seed/update IPO calendar entries in Postgres.
+- `npm run ipo:smoke` to seed and verify IPO calendar APIs end-to-end.
+- `npm run ipo:subscriptions:sync` to run one IPO subscription scraper pass.
+- `npm run ipo:subscriptions:watch` to run IPO subscription scraper continuously on interval.
+- `npm run ipo:subscriptions:smoke` to run end-to-end IPO subscription scraper/API smoke test.
+- `npm run ipo:gmp:sync` to run one IPO GMP scraper pass.
+- `npm run ipo:gmp:watch` to run IPO GMP scraper continuously on interval.
+- `npm run ipo:gmp:smoke` to run end-to-end IPO GMP scraper/API smoke test.
+- `npm run institutional:fii-dii:sync` to run one FII/DII scraper pass.
+- `npm run institutional:fii-dii:watch` to run FII/DII scraper continuously on interval.
+- `npm run institutional:fii-dii:smoke` to run end-to-end FII/DII scraper/API smoke test.
 
 ## Scheduler Environment Variables
 
@@ -148,3 +254,44 @@ All new endpoints are mounted under `/api/v1`.
 - `MARKET_SYNC_INTERVAL_MS=60000` controls recurring sync interval.
 - `MARKET_SYNC_RUN_ON_START=true` performs immediate sync when scheduler starts.
 - `MARKET_SYNC_STALE_AFTER_MS=180000` controls stale threshold in status endpoint.
+- `ALERT_EVALUATOR_ENABLED=true` enables in-process alert evaluator scheduler on server startup.
+- `ALERT_EVALUATOR_INTERVAL_MS=30000` controls recurring alert evaluation cadence.
+- `ALERT_EVALUATOR_RUN_ON_START=true` performs immediate alert evaluation on startup.
+- `ALERT_EVALUATOR_MARKET_HOURS_ONLY=true` evaluates alerts only during configured market window.
+- `ALERT_EVALUATOR_FORCE_RUN=false` bypasses market-hours gating when set to `true`.
+- `ALERT_EVALUATOR_COOLDOWN_SECONDS=300` minimum seconds between repeated trigger stamps for same alert.
+- `ALERT_MARKET_TIMEZONE=Asia/Kolkata` timezone used for market-hours gating.
+- `ALERT_MARKET_OPEN_HHMM=0915` market open in HHMM format.
+- `ALERT_MARKET_CLOSE_HHMM=1530` market close in HHMM format.
+- `ALERT_MARKET_WEEKDAYS=1,2,3,4,5` valid trading weekdays (`0=Sunday`, `6=Saturday`).
+- `NOTIFICATION_DELIVERY_ENABLED=true` enables in-process notification delivery scheduler on server startup.
+- `NOTIFICATION_DELIVERY_INTERVAL_MS=30000` controls recurring notification processing cadence.
+- `NOTIFICATION_DELIVERY_RUN_ON_START=true` processes queued notifications immediately on startup.
+- `NOTIFICATION_DELIVERY_BATCH_SIZE=50` max queued notifications claimed per processing run.
+- `NOTIFICATION_EMAIL_MODE=mock` email delivery mode (`mock` or `webhook`).
+- `NOTIFICATION_EMAIL_WEBHOOK_URL=` optional webhook URL used when email mode is `webhook`.
+- `NOTIFICATION_PUSH_MODE=mock` push delivery mode (`mock` or `webhook`).
+- `NOTIFICATION_PUSH_WEBHOOK_URL=` optional webhook URL used when push mode is `webhook`.
+- `IPO_SUBSCRIPTION_SYNC_INTERVAL_MS=3600000` interval for IPO subscription scraper watch mode.
+- `IPO_GMP_SYNC_INTERVAL_MS=3600000` interval for IPO GMP scraper watch mode.
+- `FII_DII_SYNC_INTERVAL_MS=86400000` interval for FII/DII scraper watch mode.
+
+## Cache Environment Variables
+
+- `CACHE_ENABLED=true` enables service-level cache-aside reads.
+- `CACHE_MAX_SIZE=10000` sets max in-memory cache entries before LRU eviction.
+- `CACHE_REDIS_ENABLED=false` enables Redis-backed cache storage when set to `true`.
+- `REDIS_URL=redis://localhost:6379` Redis connection URL used when Redis cache is enabled.
+- `CACHE_REDIS_NAMESPACE=stock_sense_backend` key namespace/prefix for Redis cache records.
+- `REDIS_CONNECT_TIMEOUT_MS=3000` Redis connect timeout in milliseconds.
+- `CACHE_MARKET_LATEST_TTL_MS=30000` TTL for `GET /api/v1/market/snapshot/latest`.
+- `CACHE_MARKET_HISTORY_TTL_MS=30000` TTL for `GET /api/v1/market/snapshot/history`.
+- `CACHE_STOCK_TICKS_TTL_MS=60000` TTL for `GET /api/v1/stocks/:symbol/ticks`.
+- `CACHE_STOCK_HISTORY_TTL_MS=300000` TTL for `GET /api/v1/stocks/:symbol/history`.
+
+When Redis cache is enabled and reachable, market/stock cache-aside reads use Redis with in-memory hydration fallback. If Redis is disabled or unavailable, cache behavior automatically falls back to in-memory only.
+
+Cache invalidation notes:
+
+- Market snapshot sync clears market snapshot cache tags.
+- Tick ingestion clears symbol-scoped stock cache tags.

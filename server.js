@@ -23,6 +23,14 @@ const {
   startMarketSyncScheduler,
   stopMarketSyncScheduler,
 } = require('./src/jobs/marketSyncScheduler');
+const {
+  startAlertEvaluatorScheduler,
+  stopAlertEvaluatorScheduler,
+} = require('./src/jobs/alertEvaluatorScheduler');
+const {
+  startNotificationDeliveryScheduler,
+  stopNotificationDeliveryScheduler,
+} = require('./src/jobs/notificationDeliveryScheduler');
 
 // Import legacy API routes from src
 const apiRoutes = require('./src/routes/legacy');
@@ -130,6 +138,8 @@ async function shutdown(signal) {
   console.log(`[Shutdown] Received ${signal}. Closing database connections...`);
   try {
     stopMarketSyncScheduler();
+    stopAlertEvaluatorScheduler();
+    stopNotificationDeliveryScheduler();
     await closePool();
     console.log('[Shutdown] Database pool closed.');
   } catch (error) {
@@ -168,6 +178,26 @@ if (require.main === module) {
       );
     } else {
       console.log('[MARKET_SYNC] Disabled (set MARKET_SYNC_ENABLED=true to enable).');
+    }
+
+    const alertEvaluatorStatus = startAlertEvaluatorScheduler();
+    if (alertEvaluatorStatus.enabled) {
+      console.log(
+        `[ALERT_EVALUATOR] Enabled with interval=${alertEvaluatorStatus.intervalMs}ms ` +
+          `runOnStart=${alertEvaluatorStatus.runOnStart} marketHoursOnly=${alertEvaluatorStatus.marketHoursOnly}`
+      );
+    } else {
+      console.log('[ALERT_EVALUATOR] Disabled (set ALERT_EVALUATOR_ENABLED=true to enable).');
+    }
+
+    const notificationDeliveryStatus = startNotificationDeliveryScheduler();
+    if (notificationDeliveryStatus.enabled) {
+      console.log(
+        `[NOTIFICATION_DELIVERY] Enabled with interval=${notificationDeliveryStatus.intervalMs}ms ` +
+          `runOnStart=${notificationDeliveryStatus.runOnStart}`
+      );
+    } else {
+      console.log('[NOTIFICATION_DELIVERY] Disabled (set NOTIFICATION_DELIVERY_ENABLED=true to enable).');
     }
 
     // Start keep-alive pinger (only in production)

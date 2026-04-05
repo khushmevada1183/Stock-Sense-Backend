@@ -79,6 +79,39 @@ const findUserById = async (userId) => {
   return toUserProfile(result.rows[0]);
 };
 
+const findUsersByIds = async (userIds) => {
+  const normalizedUserIds = Array.isArray(userIds)
+    ? [...new Set(userIds.map((userId) => String(userId || '').trim()).filter(Boolean))]
+    : [];
+
+  if (normalizedUserIds.length === 0) {
+    return [];
+  }
+
+  const result = await query(
+    `
+      SELECT
+        id::text AS id,
+        email,
+        role,
+        full_name,
+        phone,
+        avatar_url,
+        is_email_verified,
+        is_active,
+        created_at,
+        updated_at,
+        last_login_at
+      FROM users
+      WHERE id = ANY($1::uuid[])
+        AND is_active = true;
+    `,
+    [normalizedUserIds]
+  );
+
+  return result.rows.map((row) => toUserProfile(row));
+};
+
 const createUser = async ({ email, passwordHash, fullName, phone }) => {
   const result = await query(
     `
@@ -511,6 +544,7 @@ const deleteLoginAttempt = async ({ scope, identifier }) => {
 module.exports = {
   findUserByEmail,
   findUserById,
+  findUsersByIds,
   createUser,
   updateUserLastLogin,
   updateUserPassword,
