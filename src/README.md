@@ -38,10 +38,22 @@ src/
       016_create_ipo_subscription_snapshots.sql
       017_create_ipo_gmp_snapshots.sql
       018_create_fii_dii_activity.sql
+      019_create_block_deals.sql
+      020_create_mutual_fund_holdings.sql
+      021_create_insider_trades.sql
+      022_create_shareholding_patterns.sql
+      023_create_corporate_actions.sql
+      024_create_earnings_calendar.sql
   jobs/
     marketSyncScheduler.js # In-process recurring market sync runtime state
     syncMarketSnapshots.js # CLI runner for one-time/watch market sync
     syncFiiDiiFlows.js      # CLI runner for one-time/watch FII/DII flow sync
+    syncBlockDeals.js       # CLI runner for one-time/watch block deals sync
+    syncMutualFundHoldings.js # CLI runner for one-time/watch mutual-fund holdings sync
+    syncInsiderTrades.js    # CLI runner for one-time/watch insider-trades sync
+    syncShareholdingPatterns.js # CLI runner for one-time/watch shareholding sync
+    syncCorporateActions.js # CLI runner for one-time/watch corporate-actions sync
+    syncEarningsCalendar.js # CLI runner for one-time/watch earnings-calendar sync
   middleware/
     apiKeyAuth.js         # API key validation middleware
     inputValidation.js    # Query/input sanitization middleware
@@ -97,6 +109,8 @@ src/
   routes/
     v1/
       index.js            # API v1 route aggregator
+  realtime/
+    socketServer.js       # Socket.IO server + optional Redis adapter runtime
   shared/
     middleware/
       asyncHandler.js
@@ -164,6 +178,9 @@ User scope is derived from JWT claims (no `userId` query/body/header override).
 - `GET /api/v1/market/snapshot/latest` to fetch latest persisted snapshot.
 - `GET /api/v1/market/snapshot/history` to fetch snapshot history.
 - `GET /api/v1/market/snapshot/status` to inspect scheduler and freshness status.
+- `GET /api/v1/market/socket/status` to inspect websocket runtime plus live-tick scheduler status.
+- `GET /api/v1/market/ticks/status` to inspect live-tick stream state, symbol subscriptions, and health.
+- `POST /api/v1/market/ticks/sync` to trigger one live-tick stream cycle (`symbols`, `persist`, `includeDefaultSymbols`).
 
 ## Portfolio Endpoints
 
@@ -216,6 +233,29 @@ User scope is derived from JWT claims (no `userId` query/body/header override).
 - `GET /api/v1/institutional/fii-dii/history` get historical activity rows (`from`, `to`, `segment`, `limit` supported).
 - `GET /api/v1/institutional/fii-dii/cumulative` get monthly/yearly cumulative net flows (`range`, `segment`, `limit` supported).
 - `POST /api/v1/institutional/fii-dii/sync` trigger FII/DII scraper sync run (API key protected when keys are configured).
+- `GET /api/v1/institutional/block-deals` get latest-day block/bulk deals (`date`, `exchange`, `symbol`, `dealType`, `limit` supported).
+- `GET /api/v1/institutional/block-deals/history` get historical block/bulk deals (`from`, `to`, `exchange`, `symbol`, `dealType`, `limit` supported).
+- `POST /api/v1/institutional/block-deals/sync` trigger block-deals scraper sync run (API key protected when keys are configured).
+- `GET /api/v1/institutional/mutual-funds` get latest monthly mutual-fund holdings (`month`, `symbol`, `amc`, `scheme`, `limit` supported).
+- `GET /api/v1/institutional/mutual-funds/history` get historical mutual-fund holdings (`from`, `to`, `symbol`, `amc`, `scheme`, `limit` supported).
+- `GET /api/v1/institutional/mutual-funds/top-holders` get top holders by market value (`month`, `symbol`, `limit` supported).
+- `POST /api/v1/institutional/mutual-funds/sync` trigger mutual-fund holdings scraper sync run (API key protected when keys are configured).
+- `GET /api/v1/institutional/insider-trades` get latest-day insider trades (`date`, `symbol`, `transactionType`, `insider`, `role`, `limit` supported).
+- `GET /api/v1/institutional/insider-trades/history` get historical insider trades (`from`, `to`, `symbol`, `transactionType`, `insider`, `role`, `limit` supported).
+- `GET /api/v1/institutional/insider-trades/summary` get monthly/yearly insider trade aggregates (`range`, `symbol`, `transactionType`, `limit` supported).
+- `POST /api/v1/institutional/insider-trades/sync` trigger insider-trades scraper sync run (API key protected when keys are configured).
+- `GET /api/v1/institutional/shareholding` get latest-quarter shareholding rows (`period`, `symbol`, `limit` supported).
+- `GET /api/v1/institutional/shareholding/history` get historical quarter-wise shareholding rows (`from`, `to`, `symbol`, `limit` supported).
+- `GET /api/v1/institutional/shareholding/trends` get quarterly/yearly shareholding aggregates (`range`, `symbol`, `limit` supported).
+- `POST /api/v1/institutional/shareholding/sync` trigger shareholding scraper sync run (API key protected when keys are configured).
+- `GET /api/v1/institutional/corporate-actions` get latest-day corporate actions (`date`, `symbol`, `actionType`, `limit` supported).
+- `GET /api/v1/institutional/corporate-actions/history` get historical corporate actions (`from`, `to`, `symbol`, `actionType`, `limit` supported).
+- `GET /api/v1/institutional/corporate-actions/summary` get monthly/yearly corporate-action aggregates (`range`, `symbol`, `actionType`, `limit` supported).
+- `POST /api/v1/institutional/corporate-actions/sync` trigger corporate-actions scraper sync run (API key protected when keys are configured).
+- `GET /api/v1/institutional/earnings-calendar` get latest-day earnings events (`date`, `symbol`, `fiscalQuarter`, `limit` supported).
+- `GET /api/v1/institutional/earnings-calendar/history` get historical earnings events (`from`, `to`, `symbol`, `fiscalQuarter`, `limit` supported).
+- `GET /api/v1/institutional/earnings-calendar/summary` get monthly/yearly earnings aggregates (`range`, `symbol`, `fiscalQuarter`, `limit` supported).
+- `POST /api/v1/institutional/earnings-calendar/sync` trigger earnings-calendar seeding run (API key protected when keys are configured).
 
 ## Stock Endpoints
 
@@ -231,8 +271,12 @@ User scope is derived from JWT claims (no `userId` query/body/header override).
 - `npm run db:check` to verify DB and Timescale readiness.
 - `npm run market:sync` to fetch and persist one market snapshot.
 - `npm run market:sync:watch` to keep market snapshots updated continuously.
+- `npm run market:ticks:sync` to run one live-tick stream cycle for subscribed/default symbols.
+- `npm run market:ticks:watch` to run live-tick streaming continuously on interval.
 - `npm run alerts:evaluate` to run one alert evaluator pass.
 - `npm run alerts:evaluate:watch` to keep evaluating alerts on interval.
+- `npm run websocket:smoke` to verify websocket connectivity and ping/pong handshake.
+- `npm run market:ticks:smoke` to verify stock-room live tick streaming and tick persistence end-to-end.
 - `npm run notifications:process` to process queued notification deliveries once.
 - `npm run notifications:process:watch` to keep processing queued deliveries on interval.
 - `npm run notifications:smoke` to run end-to-end notification delivery smoke test.
@@ -247,6 +291,24 @@ User scope is derived from JWT claims (no `userId` query/body/header override).
 - `npm run institutional:fii-dii:sync` to run one FII/DII scraper pass.
 - `npm run institutional:fii-dii:watch` to run FII/DII scraper continuously on interval.
 - `npm run institutional:fii-dii:smoke` to run end-to-end FII/DII scraper/API smoke test.
+- `npm run institutional:block-deals:sync` to run one block-deals scraper pass.
+- `npm run institutional:block-deals:watch` to run block-deals scraper continuously on interval.
+- `npm run institutional:block-deals:smoke` to run end-to-end block-deals scraper/API smoke test.
+- `npm run institutional:mutual-funds:sync` to run one mutual-fund holdings scraper pass.
+- `npm run institutional:mutual-funds:watch` to run mutual-fund holdings scraper continuously on interval.
+- `npm run institutional:mutual-funds:smoke` to run end-to-end mutual-fund holdings scraper/API smoke test.
+- `npm run institutional:insider-trades:sync` to run one insider-trades scraper pass.
+- `npm run institutional:insider-trades:watch` to run insider-trades scraper continuously on interval.
+- `npm run institutional:insider-trades:smoke` to run end-to-end insider-trades scraper/API smoke test.
+- `npm run institutional:shareholding:sync` to run one shareholding-pattern scraper pass.
+- `npm run institutional:shareholding:watch` to run shareholding-pattern scraper continuously on interval.
+- `npm run institutional:shareholding:smoke` to run end-to-end shareholding scraper/API smoke test.
+- `npm run institutional:corporate-actions:sync` to run one corporate-actions scraper pass.
+- `npm run institutional:corporate-actions:watch` to run corporate-actions scraper continuously on interval.
+- `npm run institutional:corporate-actions:smoke` to run end-to-end corporate-actions scraper/API smoke test.
+- `npm run institutional:earnings-calendar:sync` to run one earnings-calendar seeding pass.
+- `npm run institutional:earnings-calendar:watch` to run earnings-calendar seeding continuously on interval.
+- `npm run institutional:earnings-calendar:smoke` to run end-to-end earnings-calendar seeding/API smoke test.
 
 ## Scheduler Environment Variables
 
@@ -275,6 +337,26 @@ User scope is derived from JWT claims (no `userId` query/body/header override).
 - `IPO_SUBSCRIPTION_SYNC_INTERVAL_MS=3600000` interval for IPO subscription scraper watch mode.
 - `IPO_GMP_SYNC_INTERVAL_MS=3600000` interval for IPO GMP scraper watch mode.
 - `FII_DII_SYNC_INTERVAL_MS=86400000` interval for FII/DII scraper watch mode.
+- `BLOCK_DEALS_SYNC_INTERVAL_MS=21600000` interval for block-deals scraper watch mode.
+- `MUTUAL_FUND_HOLDINGS_SYNC_INTERVAL_MS=86400000` interval for mutual-fund holdings scraper watch mode.
+- `INSIDER_TRADES_SYNC_INTERVAL_MS=86400000` interval for insider-trades scraper watch mode.
+- `SHAREHOLDING_SYNC_INTERVAL_MS=86400000` interval for shareholding scraper watch mode.
+- `CORPORATE_ACTIONS_SYNC_INTERVAL_MS=86400000` interval for corporate-actions scraper watch mode.
+- `EARNINGS_CALENDAR_SYNC_INTERVAL_MS=86400000` interval for earnings-calendar seeding watch mode.
+- `WEBSOCKET_ENABLED=true` enables Socket.IO runtime on server startup.
+- `WEBSOCKET_PATH=/socket.io` Socket.IO transport path.
+- `WEBSOCKET_CORS_ORIGIN=*` comma-separated websocket CORS origins or `*`.
+- `WEBSOCKET_PING_INTERVAL_MS=25000` websocket ping interval in milliseconds.
+- `WEBSOCKET_PING_TIMEOUT_MS=20000` websocket ping timeout in milliseconds.
+- `WEBSOCKET_REDIS_ADAPTER_ENABLED=true` enables Redis pub/sub adapter for Socket.IO.
+- `WEBSOCKET_REDIS_URL=redis://localhost:6379` websocket adapter Redis URL (falls back to `REDIS_URL`).
+- `LIVE_TICK_STREAM_ENABLED=true` enables in-process live tick stream scheduler.
+- `LIVE_TICK_STREAM_INTERVAL_MS=15000` interval for live tick quote fetch cycles.
+- `LIVE_TICK_STREAM_RUN_ON_START=true` runs one stream cycle immediately at scheduler startup.
+- `LIVE_TICK_STREAM_PERSIST_TICKS=true` persists streamed ticks into `stock_price_ticks`.
+- `LIVE_TICK_STREAM_INCLUDE_DEFAULT_SYMBOLS=true` includes default symbols even without active socket subscriptions.
+- `LIVE_TICK_STREAM_DEFAULT_SYMBOLS=RELIANCE,TCS,INFY,HDFCBANK,ICICIBANK` default symbols used for stream cycles.
+- `LIVE_TICK_STREAM_MAX_SYMBOLS=30` max symbols processed per stream cycle.
 
 ## Cache Environment Variables
 

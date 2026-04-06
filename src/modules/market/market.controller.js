@@ -5,6 +5,37 @@ const {
   getSnapshotHistory,
 } = require('./market.service');
 const { getMarketSyncSchedulerStatus } = require('../../jobs/marketSyncScheduler');
+const { getWebSocketServerStatus } = require('../../realtime/socketServer');
+const {
+  runLiveTickStreamNow,
+  getLiveTickStreamStatus,
+} = require('../../realtime/liveTickStreamer');
+
+const parseBoolean = (value, fallback) => {
+  if (value === undefined || value === null || value === '') {
+    return fallback;
+  }
+
+  const normalized = String(value).trim().toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) {
+    return true;
+  }
+
+  if (['0', 'false', 'no', 'off'].includes(normalized)) {
+    return false;
+  }
+
+  return fallback;
+};
+
+const parseSymbols = (value) => {
+  const raw = String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return raw.length > 0 ? raw : null;
+};
 
 const syncSnapshot = asyncHandler(async (req, res) => {
   const snapshot = await syncMarketSnapshot();
@@ -78,9 +109,49 @@ const getHistory = asyncHandler(async (req, res) => {
   });
 });
 
+const getSocketStatus = asyncHandler(async (req, res) => {
+  const status = getWebSocketServerStatus();
+  const liveTickStream = getLiveTickStreamStatus();
+
+  res.status(200).json({
+    success: true,
+    data: {
+      websocket: status,
+      liveTickStream,
+    },
+  });
+});
+
+const getLiveTickStatus = asyncHandler(async (req, res) => {
+  const status = getLiveTickStreamStatus();
+
+  res.status(200).json({
+    success: true,
+    data: status,
+  });
+});
+
+const syncLiveTicks = asyncHandler(async (req, res) => {
+  const result = await runLiveTickStreamNow('api-manual', {
+    symbols: parseSymbols(req.query.symbols),
+    persistTicks: parseBoolean(req.query.persist, undefined),
+    includeDefaultSymbols: parseBoolean(req.query.includeDefaultSymbols, undefined),
+  });
+
+  const statusCode = result.success || result.skipped ? 200 : 500;
+
+  res.status(statusCode).json({
+    success: Boolean(result.success || result.skipped),
+    data: result,
+  });
+});
+
 module.exports = {
   syncSnapshot,
   getLatest,
   getStatus,
   getHistory,
+  getSocketStatus,
+  getLiveTickStatus,
+  syncLiveTicks,
 };

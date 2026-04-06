@@ -31,6 +31,15 @@ const {
   startNotificationDeliveryScheduler,
   stopNotificationDeliveryScheduler,
 } = require('./src/jobs/notificationDeliveryScheduler');
+const {
+  startWebSocketServer,
+  stopWebSocketServer,
+  emitEvent,
+} = require('./src/realtime/socketServer');
+const {
+  startLiveTickStreamScheduler,
+  stopLiveTickStreamScheduler,
+} = require('./src/realtime/liveTickStreamer');
 
 // Import legacy API routes from src
 const apiRoutes = require('./src/routes/legacy');
@@ -137,6 +146,8 @@ function keepAlive() {
 async function shutdown(signal) {
   console.log(`[Shutdown] Received ${signal}. Closing database connections...`);
   try {
+    stopLiveTickStreamScheduler();
+    await stopWebSocketServer();
     stopMarketSyncScheduler();
     stopAlertEvaluatorScheduler();
     stopNotificationDeliveryScheduler();
@@ -157,10 +168,39 @@ if (require.main === module) {
     });
   });
 
-  app.listen(PORT, () => {
+  const httpServer = app.listen(PORT, () => {
     console.log(`Indian Stock API Server running on port ${PORT}`);
     console.log(`API Base URL: ${API_CONFIG.BASE_URL}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+
+    startWebSocketServer(httpServer)
+      .then((status) => {
+        const liveTickStreamStatus = startLiveTickStreamScheduler({
+          emitEvent,
+        });
+
+        if (status.enabled) {
+          console.log(
+            `[WEBSOCKET] Enabled path=${status.path} adapterEnabled=${status.adapterEnabled} ` +
+            `redisConnected=${status.redisConnected}`
+          );
+        } else {
+          console.log('[WEBSOCKET] Disabled (set WEBSOCKET_ENABLED=true to enable).');
+        }
+
+        if (liveTickStreamStatus.enabled) {
+          console.log(
+            `[LIVE_TICK_STREAM] Enabled interval=${liveTickStreamStatus.intervalMs}ms ` +
+              `runOnStart=${liveTickStreamStatus.runOnStart} ` +
+              `persistTicks=${liveTickStreamStatus.persistTicks}`
+          );
+        } else {
+          console.log('[LIVE_TICK_STREAM] Disabled (set LIVE_TICK_STREAM_ENABLED=true to enable).');
+        }
+      })
+      .catch((error) => {
+        console.error(`[WEBSOCKET] Startup failed: ${error.message}`);
+      });
 
     checkConnection()
       .then((result) => {

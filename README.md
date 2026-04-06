@@ -71,6 +71,26 @@ NOTIFICATION_PUSH_WEBHOOK_URL=
 IPO_SUBSCRIPTION_SYNC_INTERVAL_MS=3600000
 IPO_GMP_SYNC_INTERVAL_MS=3600000
 FII_DII_SYNC_INTERVAL_MS=86400000
+BLOCK_DEALS_SYNC_INTERVAL_MS=21600000
+MUTUAL_FUND_HOLDINGS_SYNC_INTERVAL_MS=86400000
+INSIDER_TRADES_SYNC_INTERVAL_MS=86400000
+SHAREHOLDING_SYNC_INTERVAL_MS=86400000
+CORPORATE_ACTIONS_SYNC_INTERVAL_MS=86400000
+EARNINGS_CALENDAR_SYNC_INTERVAL_MS=86400000
+WEBSOCKET_ENABLED=true
+WEBSOCKET_PATH=/socket.io
+WEBSOCKET_CORS_ORIGIN=*
+WEBSOCKET_PING_INTERVAL_MS=25000
+WEBSOCKET_PING_TIMEOUT_MS=20000
+WEBSOCKET_REDIS_ADAPTER_ENABLED=true
+WEBSOCKET_REDIS_URL=redis://localhost:6379
+LIVE_TICK_STREAM_ENABLED=true
+LIVE_TICK_STREAM_INTERVAL_MS=15000
+LIVE_TICK_STREAM_RUN_ON_START=true
+LIVE_TICK_STREAM_PERSIST_TICKS=true
+LIVE_TICK_STREAM_INCLUDE_DEFAULT_SYMBOLS=true
+LIVE_TICK_STREAM_DEFAULT_SYMBOLS=RELIANCE,TCS,INFY,HDFCBANK,ICICIBANK
+LIVE_TICK_STREAM_MAX_SYMBOLS=30
 ```
 
 ## Running the API
@@ -115,6 +135,54 @@ npm run institutional:fii-dii:sync
 # Optional continuous FII/DII scraper sync
 npm run institutional:fii-dii:watch
 
+# Optional one-time block deals scraper sync
+npm run institutional:block-deals:sync
+
+# Optional continuous block deals scraper sync
+npm run institutional:block-deals:watch
+
+# Optional one-time mutual-fund holdings scraper sync
+npm run institutional:mutual-funds:sync
+
+# Optional continuous mutual-fund holdings scraper sync
+npm run institutional:mutual-funds:watch
+
+# Optional one-time insider-trades scraper sync
+npm run institutional:insider-trades:sync
+
+# Optional continuous insider-trades scraper sync
+npm run institutional:insider-trades:watch
+
+# Optional one-time shareholding scraper sync
+npm run institutional:shareholding:sync
+
+# Optional continuous shareholding scraper sync
+npm run institutional:shareholding:watch
+
+# Optional one-time corporate-actions scraper sync
+npm run institutional:corporate-actions:sync
+
+# Optional continuous corporate-actions scraper sync
+npm run institutional:corporate-actions:watch
+
+# Optional one-time earnings-calendar seeding run
+npm run institutional:earnings-calendar:sync
+
+# Optional continuous earnings-calendar seeding run
+npm run institutional:earnings-calendar:watch
+
+# Optional one-time live-tick stream run
+npm run market:ticks:sync
+
+# Optional continuous live-tick stream watch run
+npm run market:ticks:watch
+
+# Optional websocket runtime smoke test (requires running server)
+npm run websocket:smoke
+
+# Optional live-tick stream smoke test (requires running server)
+npm run market:ticks:smoke
+
 # Development mode
 npm run dev
 
@@ -135,6 +203,32 @@ The API will be available at `http://localhost:10000`.
 - `GET /api/v1/institutional/fii-dii/history?from=<yyyy-mm-dd>&to=<yyyy-mm-dd>&segment=<equity|debt|hybrid>&limit=<n>` - Historical FII/DII rows
 - `GET /api/v1/institutional/fii-dii/cumulative?range=<monthly|yearly>&segment=<equity|debt|hybrid>&limit=<n>` - Cumulative net flows
 - `POST /api/v1/institutional/fii-dii/sync` - Trigger FII/DII scraper sync run
+- `GET /api/v1/institutional/block-deals?date=<yyyy-mm-dd>&exchange=<NSE|BSE>&symbol=<symbol>&dealType=<block|bulk>&limit=<n>` - Latest available block/bulk deals
+- `GET /api/v1/institutional/block-deals/history?from=<yyyy-mm-dd>&to=<yyyy-mm-dd>&exchange=<NSE|BSE>&symbol=<symbol>&dealType=<block|bulk>&limit=<n>` - Historical block/bulk deals
+- `POST /api/v1/institutional/block-deals/sync` - Trigger block deals scraper sync run
+- `GET /api/v1/institutional/mutual-funds?month=<yyyy-mm-dd>&symbol=<symbol>&amc=<name>&scheme=<name>&limit=<n>` - Latest monthly mutual-fund holdings
+- `GET /api/v1/institutional/mutual-funds/history?from=<yyyy-mm-dd>&to=<yyyy-mm-dd>&symbol=<symbol>&amc=<name>&scheme=<name>&limit=<n>` - Historical mutual-fund holdings
+- `GET /api/v1/institutional/mutual-funds/top-holders?month=<yyyy-mm-dd>&symbol=<symbol>&limit=<n>` - Top mutual-fund holders by market value
+- `POST /api/v1/institutional/mutual-funds/sync` - Trigger mutual-fund holdings scraper sync run
+- `GET /api/v1/institutional/insider-trades?date=<yyyy-mm-dd>&symbol=<symbol>&transactionType=<buy|sell>&insider=<name>&role=<role>&limit=<n>` - Latest-day insider trades
+- `GET /api/v1/institutional/insider-trades/history?from=<yyyy-mm-dd>&to=<yyyy-mm-dd>&symbol=<symbol>&transactionType=<buy|sell>&insider=<name>&role=<role>&limit=<n>` - Historical insider trades
+- `GET /api/v1/institutional/insider-trades/summary?range=<monthly|yearly>&symbol=<symbol>&transactionType=<buy|sell>&limit=<n>` - Insider-trade summary aggregates
+- `POST /api/v1/institutional/insider-trades/sync` - Trigger insider-trades scraper sync run
+- `GET /api/v1/institutional/shareholding?period=<yyyy-mm-dd>&symbol=<symbol>&limit=<n>` - Latest-quarter shareholding pattern rows
+- `GET /api/v1/institutional/shareholding/history?from=<yyyy-mm-dd>&to=<yyyy-mm-dd>&symbol=<symbol>&limit=<n>` - Historical shareholding pattern rows
+- `GET /api/v1/institutional/shareholding/trends?range=<quarterly|yearly>&symbol=<symbol>&limit=<n>` - Quarterly/yearly shareholding trend aggregates
+- `POST /api/v1/institutional/shareholding/sync` - Trigger shareholding scraper sync run
+- `GET /api/v1/institutional/corporate-actions?date=<yyyy-mm-dd>&symbol=<symbol>&actionType=<dividend|split|bonus|rights|buyback>&limit=<n>` - Latest-day corporate actions
+- `GET /api/v1/institutional/corporate-actions/history?from=<yyyy-mm-dd>&to=<yyyy-mm-dd>&symbol=<symbol>&actionType=<dividend|split|bonus|rights|buyback>&limit=<n>` - Historical corporate actions
+- `GET /api/v1/institutional/corporate-actions/summary?range=<monthly|yearly>&symbol=<symbol>&actionType=<dividend|split|bonus|rights|buyback>&limit=<n>` - Corporate-action summary aggregates
+- `POST /api/v1/institutional/corporate-actions/sync` - Trigger corporate-actions scraper sync run
+- `GET /api/v1/institutional/earnings-calendar?date=<yyyy-mm-dd>&symbol=<symbol>&fiscalQuarter=<Q1|Q2|Q3|Q4>&limit=<n>` - Latest-day earnings calendar events
+- `GET /api/v1/institutional/earnings-calendar/history?from=<yyyy-mm-dd>&to=<yyyy-mm-dd>&symbol=<symbol>&fiscalQuarter=<Q1|Q2|Q3|Q4>&limit=<n>` - Historical earnings calendar events
+- `GET /api/v1/institutional/earnings-calendar/summary?range=<monthly|yearly>&symbol=<symbol>&fiscalQuarter=<Q1|Q2|Q3|Q4>&limit=<n>` - Earnings calendar summary aggregates
+- `POST /api/v1/institutional/earnings-calendar/sync` - Trigger earnings-calendar seeding run
+- `GET /api/v1/market/socket/status` - WebSocket server runtime and adapter status
+- `GET /api/v1/market/ticks/status` - Live tick stream scheduler/subscription status
+- `POST /api/v1/market/ticks/sync?symbols=<csv>&persist=<true|false>&includeDefaultSymbols=<true|false>` - Trigger one live tick stream cycle
 
 ### Health Check
 - `GET /api/health` - Check server status

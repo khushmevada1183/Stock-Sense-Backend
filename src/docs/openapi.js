@@ -60,7 +60,7 @@ const openApiSpec = {
     { name: 'Alerts', description: 'Price alert CRUD and filtering' },
     { name: 'Notifications', description: 'Notification delivery history and push device management' },
     { name: 'IPO', description: 'IPO calendar APIs and seeded issue data' },
-    { name: 'Institutional', description: 'FII/DII flow scraper and historical aggregates' },
+    { name: 'Institutional', description: 'FII/DII flows, block deals, mutual-fund holdings, insider trades, shareholding patterns, corporate actions, earnings calendar, and institutional data aggregates' },
     { name: 'Stocks', description: 'Stock tick ingestion and candle history reads' },
     { name: 'Market', description: 'Market snapshot ingestion and reads' },
   ],
@@ -1453,6 +1453,849 @@ const openApiSpec = {
         },
       },
     },
+    '/api/v1/institutional/block-deals': {
+      get: {
+        tags: ['Institutional'],
+        summary: 'Get latest available day of block or bulk deals',
+        parameters: [
+          {
+            name: 'date',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'exchange',
+            in: 'query',
+            schema: { type: 'string', enum: ['NSE', 'BSE'] },
+          },
+          {
+            name: 'symbol',
+            in: 'query',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'dealType',
+            in: 'query',
+            schema: { type: 'string', enum: ['block', 'bulk'] },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 500, default: 100 },
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+    '/api/v1/institutional/block-deals/history': {
+      get: {
+        tags: ['Institutional'],
+        summary: 'Get historical block or bulk deals with date range filters',
+        parameters: [
+          {
+            name: 'from',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'to',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'exchange',
+            in: 'query',
+            schema: { type: 'string', enum: ['NSE', 'BSE'] },
+          },
+          {
+            name: 'symbol',
+            in: 'query',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'dealType',
+            in: 'query',
+            schema: { type: 'string', enum: ['block', 'bulk'] },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 1000, default: 250 },
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+    '/api/v1/institutional/block-deals/sync': {
+      post: {
+        tags: ['Institutional'],
+        summary: 'Trigger one block-deals scraper sync run',
+        parameters: [
+          {
+            name: 'from',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'to',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'exchange',
+            in: 'query',
+            schema: { type: 'string', enum: ['NSE', 'BSE'] },
+          },
+          {
+            name: 'days',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 365, default: 7 },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 1000, default: 200 },
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+          401: errorResponse,
+          403: errorResponse,
+        },
+      },
+    },
+    '/api/v1/institutional/mutual-funds': {
+      get: {
+        tags: ['Institutional'],
+        summary: 'Get latest monthly mutual-fund holdings rows',
+        parameters: [
+          {
+            name: 'month',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'symbol',
+            in: 'query',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'amc',
+            in: 'query',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'scheme',
+            in: 'query',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 1000, default: 100 },
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+    '/api/v1/institutional/mutual-funds/history': {
+      get: {
+        tags: ['Institutional'],
+        summary: 'Get historical monthly mutual-fund holdings rows',
+        parameters: [
+          {
+            name: 'from',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'to',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'symbol',
+            in: 'query',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'amc',
+            in: 'query',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'scheme',
+            in: 'query',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 2000, default: 300 },
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+    '/api/v1/institutional/mutual-funds/top-holders': {
+      get: {
+        tags: ['Institutional'],
+        summary: 'Get top mutual-fund holders by market value for latest or selected month',
+        parameters: [
+          {
+            name: 'month',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'symbol',
+            in: 'query',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 200, default: 20 },
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+    '/api/v1/institutional/mutual-funds/sync': {
+      post: {
+        tags: ['Institutional'],
+        summary: 'Trigger one mutual-fund holdings scraper sync run',
+        parameters: [
+          {
+            name: 'from',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'to',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'symbol',
+            in: 'query',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'months',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 60, default: 6 },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 5000, default: 300 },
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+          401: errorResponse,
+          403: errorResponse,
+        },
+      },
+    },
+    '/api/v1/institutional/insider-trades': {
+      get: {
+        tags: ['Institutional'],
+        summary: 'Get latest-day insider trading rows',
+        parameters: [
+          {
+            name: 'date',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'symbol',
+            in: 'query',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'transactionType',
+            in: 'query',
+            schema: { type: 'string', enum: ['buy', 'sell'] },
+          },
+          {
+            name: 'insider',
+            in: 'query',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'role',
+            in: 'query',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 1000, default: 100 },
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+    '/api/v1/institutional/insider-trades/history': {
+      get: {
+        tags: ['Institutional'],
+        summary: 'Get historical insider trading rows',
+        parameters: [
+          {
+            name: 'from',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'to',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'symbol',
+            in: 'query',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'transactionType',
+            in: 'query',
+            schema: { type: 'string', enum: ['buy', 'sell'] },
+          },
+          {
+            name: 'insider',
+            in: 'query',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'role',
+            in: 'query',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 3000, default: 300 },
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+    '/api/v1/institutional/insider-trades/summary': {
+      get: {
+        tags: ['Institutional'],
+        summary: 'Get monthly or yearly insider trading value summary',
+        parameters: [
+          {
+            name: 'range',
+            in: 'query',
+            schema: { type: 'string', enum: ['monthly', 'yearly'], default: 'monthly' },
+          },
+          {
+            name: 'symbol',
+            in: 'query',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'transactionType',
+            in: 'query',
+            schema: { type: 'string', enum: ['buy', 'sell'] },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 120, default: 12 },
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+    '/api/v1/institutional/insider-trades/sync': {
+      post: {
+        tags: ['Institutional'],
+        summary: 'Trigger one insider-trades scraper sync run',
+        parameters: [
+          {
+            name: 'from',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'to',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'symbol',
+            in: 'query',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'transactionType',
+            in: 'query',
+            schema: { type: 'string', enum: ['buy', 'sell'] },
+          },
+          {
+            name: 'days',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 365, default: 30 },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 5000, default: 300 },
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+          401: errorResponse,
+          403: errorResponse,
+        },
+      },
+    },
+    '/api/v1/institutional/shareholding': {
+      get: {
+        tags: ['Institutional'],
+        summary: 'Get latest-quarter shareholding pattern rows',
+        parameters: [
+          {
+            name: 'period',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'symbol',
+            in: 'query',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 1000, default: 100 },
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+    '/api/v1/institutional/shareholding/history': {
+      get: {
+        tags: ['Institutional'],
+        summary: 'Get historical quarterly shareholding pattern rows',
+        parameters: [
+          {
+            name: 'from',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'to',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'symbol',
+            in: 'query',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 3000, default: 300 },
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+    '/api/v1/institutional/shareholding/trends': {
+      get: {
+        tags: ['Institutional'],
+        summary: 'Get quarterly or yearly shareholding trend aggregates',
+        parameters: [
+          {
+            name: 'range',
+            in: 'query',
+            schema: { type: 'string', enum: ['quarterly', 'yearly'], default: 'quarterly' },
+          },
+          {
+            name: 'symbol',
+            in: 'query',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 120, default: 12 },
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+    '/api/v1/institutional/shareholding/sync': {
+      post: {
+        tags: ['Institutional'],
+        summary: 'Trigger one quarterly shareholding scraper sync run',
+        parameters: [
+          {
+            name: 'from',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'to',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'symbol',
+            in: 'query',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'quarters',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 80, default: 8 },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 5000, default: 400 },
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+          401: errorResponse,
+          403: errorResponse,
+        },
+      },
+    },
+    '/api/v1/institutional/corporate-actions': {
+      get: {
+        tags: ['Institutional'],
+        summary: 'Get latest-day corporate actions rows',
+        parameters: [
+          {
+            name: 'date',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'symbol',
+            in: 'query',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'actionType',
+            in: 'query',
+            schema: { type: 'string', enum: ['dividend', 'split', 'bonus', 'rights', 'buyback'] },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 1000, default: 100 },
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+    '/api/v1/institutional/corporate-actions/history': {
+      get: {
+        tags: ['Institutional'],
+        summary: 'Get historical corporate actions rows',
+        parameters: [
+          {
+            name: 'from',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'to',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'symbol',
+            in: 'query',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'actionType',
+            in: 'query',
+            schema: { type: 'string', enum: ['dividend', 'split', 'bonus', 'rights', 'buyback'] },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 3000, default: 300 },
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+    '/api/v1/institutional/corporate-actions/summary': {
+      get: {
+        tags: ['Institutional'],
+        summary: 'Get monthly or yearly corporate actions summary',
+        parameters: [
+          {
+            name: 'range',
+            in: 'query',
+            schema: { type: 'string', enum: ['monthly', 'yearly'], default: 'monthly' },
+          },
+          {
+            name: 'symbol',
+            in: 'query',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'actionType',
+            in: 'query',
+            schema: { type: 'string', enum: ['dividend', 'split', 'bonus', 'rights', 'buyback'] },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 120, default: 12 },
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+    '/api/v1/institutional/corporate-actions/sync': {
+      post: {
+        tags: ['Institutional'],
+        summary: 'Trigger one corporate-actions scraper sync run',
+        parameters: [
+          {
+            name: 'from',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'to',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'symbol',
+            in: 'query',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'actionType',
+            in: 'query',
+            schema: { type: 'string', enum: ['dividend', 'split', 'bonus', 'rights', 'buyback'] },
+          },
+          {
+            name: 'months',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 120, default: 24 },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 5000, default: 300 },
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+          401: errorResponse,
+          403: errorResponse,
+        },
+      },
+    },
+    '/api/v1/institutional/earnings-calendar': {
+      get: {
+        tags: ['Institutional'],
+        summary: 'Get latest-day earnings calendar rows',
+        parameters: [
+          {
+            name: 'date',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'symbol',
+            in: 'query',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'fiscalQuarter',
+            in: 'query',
+            schema: { type: 'string', enum: ['Q1', 'Q2', 'Q3', 'Q4'] },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 1000, default: 100 },
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+    '/api/v1/institutional/earnings-calendar/history': {
+      get: {
+        tags: ['Institutional'],
+        summary: 'Get historical earnings calendar rows',
+        parameters: [
+          {
+            name: 'from',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'to',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'symbol',
+            in: 'query',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'fiscalQuarter',
+            in: 'query',
+            schema: { type: 'string', enum: ['Q1', 'Q2', 'Q3', 'Q4'] },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 3000, default: 300 },
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+    '/api/v1/institutional/earnings-calendar/summary': {
+      get: {
+        tags: ['Institutional'],
+        summary: 'Get monthly or yearly earnings calendar summary',
+        parameters: [
+          {
+            name: 'range',
+            in: 'query',
+            schema: { type: 'string', enum: ['monthly', 'yearly'], default: 'monthly' },
+          },
+          {
+            name: 'symbol',
+            in: 'query',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'fiscalQuarter',
+            in: 'query',
+            schema: { type: 'string', enum: ['Q1', 'Q2', 'Q3', 'Q4'] },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 120, default: 12 },
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+    '/api/v1/institutional/earnings-calendar/sync': {
+      post: {
+        tags: ['Institutional'],
+        summary: 'Trigger one earnings-calendar seeding run',
+        parameters: [
+          {
+            name: 'from',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'to',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'symbol',
+            in: 'query',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'fiscalQuarter',
+            in: 'query',
+            schema: { type: 'string', enum: ['Q1', 'Q2', 'Q3', 'Q4'] },
+          },
+          {
+            name: 'quarters',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 80, default: 8 },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 5000, default: 320 },
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+          401: errorResponse,
+          403: errorResponse,
+        },
+      },
+    },
 
     '/api/v1/stocks/{symbol}/ticks': {
       get: {
@@ -1545,6 +2388,54 @@ const openApiSpec = {
         summary: 'Get scheduler and freshness status for market snapshots',
         responses: {
           200: successResponse,
+        },
+      },
+    },
+    '/api/v1/market/socket/status': {
+      get: {
+        tags: ['Market'],
+        summary: 'Get websocket server runtime status',
+        responses: {
+          200: successResponse,
+        },
+      },
+    },
+    '/api/v1/market/ticks/status': {
+      get: {
+        tags: ['Market'],
+        summary: 'Get live tick stream scheduler and subscription status',
+        responses: {
+          200: successResponse,
+        },
+      },
+    },
+    '/api/v1/market/ticks/sync': {
+      post: {
+        tags: ['Market'],
+        summary: 'Trigger one live tick stream cycle for subscribed/default symbols',
+        parameters: [
+          {
+            name: 'symbols',
+            in: 'query',
+            schema: { type: 'string' },
+            description: 'Optional comma-separated symbol override list',
+          },
+          {
+            name: 'persist',
+            in: 'query',
+            schema: { type: 'boolean' },
+            description: 'Whether to persist generated ticks into stock_price_ticks',
+          },
+          {
+            name: 'includeDefaultSymbols',
+            in: 'query',
+            schema: { type: 'boolean' },
+            description: 'Include configured default symbols when no explicit symbol list is provided',
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
         },
       },
     },

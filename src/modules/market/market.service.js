@@ -5,6 +5,7 @@ const {
   getLatestMarketSnapshot,
   listMarketSnapshots,
 } = require('./market.repository');
+const { emitMarketSnapshotEvent } = require('../../realtime/socketServer');
 
 const toPositiveInt = (value, fallback) => {
   const parsed = Number.parseInt(value, 10);
@@ -89,6 +90,8 @@ const syncMarketSnapshot = async () => {
   if (CACHE_ENABLED) {
     await cacheManager.clearByTagsAsync(MARKET_CACHE_TAG);
   }
+
+  emitMarketSnapshotEvent(snapshot);
 
   return snapshot;
 };

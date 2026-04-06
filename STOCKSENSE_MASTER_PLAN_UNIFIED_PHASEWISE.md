@@ -75,13 +75,21 @@ Legend:
 - [x] IPO subscription data scraper with v1 subscription APIs
 - [x] GMP tracking with v1 APIs and sync job
 - [x] FII/DII daily data scraper with institutional APIs and sync job
+- [x] Block deals scraper (NSE/BSE) with institutional APIs and sync job
+- [x] Mutual fund holdings data pipeline (SEBI monthly data) with institutional APIs and sync job
+- [x] Insider trading data ingestion with institutional APIs and sync job
 
 ### Immediate Pending (Next Plan Targets)
 
 - [ ] Phase 0 Docker Compose stack (TimescaleDB, Redis, Kafka, Elasticsearch) (deferred for now)
 - [ ] Phase 0 Kafka topics creation (deferred for now)
 - [ ] Phase 0 Timescale upgrade for true continuous aggregate policies (currently using materialized aggregate views)
-- [ ] Phase 3 block deals scraper (NSE/BSE data)
+- [x] Phase 3 shareholding pattern quarterly data
+- [x] Phase 3 corporate actions scraper
+- [x] Phase 3 earnings calendar seeding
+- [x] Phase 4 WebSocket server with Socket.io + Redis adapter
+- [x] Phase 4 live tick streaming from NSE WebSocket feed
+- [ ] Phase 4 market overview real-time updates room
 
 ## Verbatim Source A Phase Roadmap
 
@@ -194,20 +202,20 @@ Legend:
 #### PHASE 3: Institutional & Advanced Data (Month 6)
 
 - [x] FII/DII daily data scraper and APIs
-- [ ] Block deals scraper (NSE/BSE data)
-- [ ] Mutual fund holdings data pipeline (SEBI monthly data)
-- [ ] Insider trading data ingestion
-- [ ] Shareholding pattern quarterly data
-- [ ] Corporate actions scraper
-- [ ] Earnings calendar seeding
-- [ ] GET /institutional/* APIs
+- [x] Block deals scraper (NSE/BSE data)
+- [x] Mutual fund holdings data pipeline (SEBI monthly data)
+- [x] Insider trading data ingestion
+- [x] Shareholding pattern quarterly data
+- [x] Corporate actions scraper
+- [x] Earnings calendar seeding
+- [x] GET /institutional/* APIs
 
 ---
 
 #### PHASE 4: Real-Time Infrastructure (Month 7)
 
-- [ ] WebSocket server with Socket.io + Redis adapter
-- [ ] Live tick streaming from NSE WebSocket feed
+- [x] WebSocket server with Socket.io + Redis adapter
+- [x] Live tick streaming from NSE WebSocket feed
 - [ ] Market overview real-time updates room
 - [ ] Per-stock live price rooms
 - [ ] Portfolio real-time P&L updates
@@ -3605,20 +3613,20 @@ jobs:
 #### PHASE 3: Institutional & Advanced Data (Month 6)
 
 - [ ] FII/DII daily data scraper and APIs
-- [ ] Block deals scraper (NSE/BSE data)
-- [ ] Mutual fund holdings data pipeline (SEBI monthly data)
-- [ ] Insider trading data ingestion
-- [ ] Shareholding pattern quarterly data
-- [ ] Corporate actions scraper
-- [ ] Earnings calendar seeding
-- [ ] GET /institutional/* APIs
+- [x] Block deals scraper (NSE/BSE data)
+- [x] Mutual fund holdings data pipeline (SEBI monthly data)
+- [x] Insider trading data ingestion
+- [x] Shareholding pattern quarterly data
+- [x] Corporate actions scraper
+- [x] Earnings calendar seeding
+- [x] GET /institutional/* APIs
 
 ---
 
 #### PHASE 4: Real-Time Infrastructure (Month 7)
 
-- [ ] WebSocket server with Socket.io + Redis adapter
-- [ ] Live tick streaming from NSE WebSocket feed
+- [x] WebSocket server with Socket.io + Redis adapter
+- [x] Live tick streaming from NSE WebSocket feed
 - [ ] Market overview real-time updates room
 - [ ] Per-stock live price rooms
 - [ ] Portfolio real-time P&L updates
