@@ -5,7 +5,22 @@ const toPositiveInt = (value, fallback) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };
 
+const chunkArray = (items = [], chunkSize = 250) => {
+  const output = [];
+
+  for (let index = 0; index < items.length; index += chunkSize) {
+    output.push(items.slice(index, index + chunkSize));
+  }
+
+  return output;
+};
+
 const normalizeSymbol = (value) => String(value || '').trim().toUpperCase();
+
+const normalizeExchange = (value) => {
+  const normalized = String(value || 'NSE').trim().toUpperCase();
+  return ['NSE', 'BSE', 'BOTH'].includes(normalized) ? normalized : 'NSE';
+};
 
 const normalizeLabel = (value, fallback = 'UNKNOWN') => {
   const normalized = String(value || '').trim();
@@ -416,7 +431,190 @@ async function listRecentSymbolsFromTicks(limit = 40) {
   return result.rows.map((row) => normalizeSymbol(row.symbol)).filter(Boolean);
 }
 
+async function upsertStocksMasterRows(rows = []) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return 0;
+  }
+
+  const sanitizedRows = rows
+    .map((row) => {
+      const symbol = normalizeSymbol(row.symbol);
+      if (!symbol) {
+        return null;
+      }
+
+      return {
+        symbol,
+        isin: row.isin ? String(row.isin).trim().toUpperCase() : null,
+        companyName: row.companyName ? String(row.companyName).trim() : symbol,
+        exchange: normalizeExchange(row.exchange),
+        nseSymbol: row.nseSymbol ? String(row.nseSymbol).trim().toUpperCase() : symbol,
+        bseCode: row.bseCode ? String(row.bseCode).trim().toUpperCase() : null,
+        series: row.series ? String(row.series).trim().toUpperCase() : 'EQ',
+        sector: row.sector ? String(row.sector).trim() : null,
+        industry: row.industry ? String(row.industry).trim() : null,
+        indexMembership: Array.isArray(row.indexMembership) ? row.indexMembership : [],
+        listingDate: toIsoDate(row.listingDate),
+        lotSize: Number.isFinite(Number(row.lotSize)) && Number(row.lotSize) > 0
+          ? Number.parseInt(String(row.lotSize), 10)
+          : 1,
+        isActive: row.isActive !== false,
+        source: row.source ? String(row.source).trim() : 'stock-nse-india',
+        metadata: row.metadata && typeof row.metadata === 'object' ? row.metadata : {},
+      };
+    })
+    .filter(Boolean);
+
+  if (sanitizedRows.length === 0) {
+    return 0;
+  }
+
+  let totalUpserted = 0;
+  const batches = chunkArray(sanitizedRows, 200);
+
+  for (const batch of batches) {
+    const values = [];
+
+    const placeholders = batch.map((row, index) => {
+      const offset = index * 15;
+
+      values.push(
+        row.symbol,
+        row.isin,
+        row.companyName,
+        row.exchange,
+        row.nseSymbol,
+        row.bseCode,
+        row.series,
+        row.sector,
+        row.industry,
+        JSON.stringify(row.indexMembership),
+        row.listingDate,
+        row.lotSize,
+        row.isActive,
+        row.source,
+        JSON.stringify(row.metadata)
+      );
+
+      return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8}, $${offset + 9}, $${offset + 10}::jsonb, $${offset + 11}::date, $${offset + 12}, $${offset + 13}, $${offset + 14}, $${offset + 15}::jsonb)`;
+    });
+
+    const result = await query(
+      `
+        INSERT INTO stocks_master (
+          symbol,
+          isin,
+          company_name,
+          exchange,
+          nse_symbol,
+          bse_code,
+          series,
+          sector,
+          industry,
+          index_membership,
+          listing_date,
+          lot_size,
+          is_active,
+          source,
+          metadata
+        )
+        VALUES ${placeholders.join(', ')}
+        ON CONFLICT (symbol)
+        DO UPDATE SET
+          isin = COALESCE(EXCLUDED.isin, stocks_master.isin),
+          company_name = EXCLUDED.company_name,
+          exchange = EXCLUDED.exchange,
+          nse_symbol = COALESCE(EXCLUDED.nse_symbol, stocks_master.nse_symbol),
+          bse_code = COALESCE(EXCLUDED.bse_code, stocks_master.bse_code),
+          series = COALESCE(EXCLUDED.series, stocks_master.series),
+          sector = COALESCE(EXCLUDED.sector, stocks_master.sector),
+          industry = COALESCE(EXCLUDED.industry, stocks_master.industry),
+          index_membership = EXCLUDED.index_membership,
+          listing_date = COALESCE(EXCLUDED.listing_date, stocks_master.listing_date),
+          lot_size = COALESCE(EXCLUDED.lot_size, stocks_master.lot_size),
+          is_active = EXCLUDED.is_active,
+          source = EXCLUDED.source,
+          metadata = EXCLUDED.metadata,
+          updated_at = NOW();
+      `,
+      values
+    );
+
+    totalUpserted += result.rowCount;
+  }
+
+  return totalUpserted;
+}
+
+async function countStocksMasterRows(searchText = '') {
+  const normalizedSearch = String(searchText || '').trim();
+  const pattern = `%${normalizedSearch}%`;
+
+  const result = await query(
+    `
+      SELECT COUNT(*)::INTEGER AS count
+      FROM stocks_master
+      WHERE is_active = TRUE
+        AND (
+          $1::text = ''
+          OR symbol ILIKE $2
+          OR company_name ILIKE $2
+          OR COALESCE(isin, '') ILIKE $2
+        );
+    `,
+    [normalizedSearch, pattern]
+  );
+
+  return Number(result.rows[0]?.count || 0);
+}
+
+async function searchStocksMasterRows({ searchText = '', limit = 20, offset = 0 } = {}) {
+  const normalizedSearch = String(searchText || '').trim();
+  const normalizedLimit = Math.min(toPositiveInt(limit, 20), 100);
+  const normalizedOffset = Math.max(0, Number.parseInt(offset, 10) || 0);
+  const pattern = `%${normalizedSearch}%`;
+  const prefixPattern = `${normalizedSearch}%`;
+
+  const result = await query(
+    `
+      SELECT
+        symbol,
+        company_name AS "companyName",
+        exchange,
+        isin,
+        nse_symbol AS "nseSymbol",
+        bse_code AS "bseCode",
+        series,
+        sector,
+        industry
+      FROM stocks_master
+      WHERE is_active = TRUE
+        AND (
+          $1::text = ''
+          OR symbol ILIKE $2
+          OR company_name ILIKE $2
+          OR COALESCE(isin, '') ILIKE $2
+        )
+      ORDER BY
+        CASE
+          WHEN $1::text <> '' AND symbol ILIKE $3 THEN 0
+          WHEN $1::text <> '' AND company_name ILIKE $3 THEN 1
+          ELSE 2
+        END,
+        symbol ASC
+      LIMIT $4
+      OFFSET $5;
+    `,
+    [normalizedSearch, pattern, prefixPattern, normalizedLimit, normalizedOffset]
+  );
+
+  return result.rows;
+}
+
 module.exports = {
+  upsertStocksMasterRows,
+  countStocksMasterRows,
+  searchStocksMasterRows,
   upsertSectorTaxonomyRows,
   getSectorTaxonomyBySymbol,
   listSectorTaxonomyBySymbols,

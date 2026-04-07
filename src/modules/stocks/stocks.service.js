@@ -1,6 +1,9 @@
 const legacyApi = require('../../services/legacy/api');
 const { buildPaginationMetadata } = require('../../shared/utils/pagination');
 const {
+  upsertStocksMasterRows,
+  countStocksMasterRows,
+  searchStocksMasterRows,
   upsertSectorTaxonomyRows,
   getSectorTaxonomyBySymbol,
   listSectorPeersBySector,
@@ -250,6 +253,67 @@ const dedupeTaxonomyRows = (rows = []) => {
   return Array.from(map.values());
 };
 
+const normalizeSeedSymbols = (symbols = []) => {
+  return Array.from(
+    new Set(
+      (Array.isArray(symbols) ? symbols : [])
+        .map((symbol) => normalizeSymbolCandidate(symbol))
+        .filter(Boolean)
+    )
+  );
+};
+
+const seedStocksMaster = async (options = {}) => {
+  const source = String(options.source || 'stock-nse-india').trim() || 'stock-nse-india';
+
+  const rawSymbols = Array.isArray(options.symbols) && options.symbols.length > 0
+    ? options.symbols
+    : await legacyApi.getAllStockSymbols();
+
+  const normalizedSymbols = normalizeSeedSymbols(rawSymbols);
+
+  if (normalizedSymbols.length === 0) {
+    return {
+      source,
+      requestedCount: Array.isArray(rawSymbols) ? rawSymbols.length : 0,
+      uniqueCount: 0,
+      processedCount: 0,
+      upsertedCount: 0,
+      skippedCount: Array.isArray(rawSymbols) ? rawSymbols.length : 0,
+    };
+  }
+
+  const maxSymbolsInput = Number.parseInt(options.maxSymbols, 10);
+  const maxSymbols = Number.isFinite(maxSymbolsInput) && maxSymbolsInput > 0
+    ? maxSymbolsInput
+    : normalizedSymbols.length;
+
+  const symbolsToSeed = normalizedSymbols.slice(0, maxSymbols);
+  const rows = symbolsToSeed.map((symbol) => ({
+    symbol,
+    companyName: symbol,
+    exchange: 'NSE',
+    nseSymbol: symbol,
+    source,
+    metadata: {
+      pipeline: 'stocks-master-seed',
+      seededAt: new Date().toISOString(),
+      strategy: 'symbol-list',
+    },
+  }));
+
+  const upsertedCount = await upsertStocksMasterRows(rows);
+
+  return {
+    source,
+    requestedCount: Array.isArray(rawSymbols) ? rawSymbols.length : 0,
+    uniqueCount: normalizedSymbols.length,
+    processedCount: rows.length,
+    upsertedCount,
+    skippedCount: Math.max(0, (Array.isArray(rawSymbols) ? rawSymbols.length : 0) - normalizedSymbols.length),
+  };
+};
+
 const seedSectorTaxonomyForSymbol = async (symbol) => {
   const [rawProfile, rawPeers] = await Promise.all([
     legacyApi.getCompanyProfile(symbol),
@@ -295,6 +359,33 @@ const seedSectorTaxonomyForSymbol = async (symbol) => {
 
 const searchStocks = async (queryParams) => {
   const query = normalizeSearchQuery(queryParams);
+
+  try {
+    const totalCount = await countStocksMasterRows(query.q);
+
+    if (totalCount > 0) {
+      const dbRows = await searchStocksMasterRows({
+        searchText: query.q,
+        limit: query.limit,
+        offset: query.offset,
+      });
+
+      return {
+        query: query.q,
+        source: 'stocks_master',
+        results: dbRows,
+        pagination: buildPaginationMetadata({
+          page: query.page,
+          limit: query.limit,
+          itemCount: dbRows.length,
+          totalCount,
+        }),
+      };
+    }
+  } catch (_) {
+    // Fall back to legacy search when stocks_master is unavailable or not yet migrated.
+  }
+
   const rawResult = await legacyApi.searchStocks(query.q);
   const records = listFromPayload(rawResult);
 
@@ -305,6 +396,7 @@ const searchStocks = async (queryParams) => {
 
   return {
     query: query.q,
+    source: 'legacy_api',
     results: paginated,
     pagination: buildPaginationMetadata({
       page: query.page,
@@ -424,6 +516,7 @@ const getStockPeers = async (rawSymbol, queryParams = {}) => {
 };
 
 module.exports = {
+  seedStocksMaster,
   searchStocks,
   getStockProfile,
   getStockQuote,

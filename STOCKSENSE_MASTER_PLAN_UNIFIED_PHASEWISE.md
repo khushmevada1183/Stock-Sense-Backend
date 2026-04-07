@@ -100,6 +100,10 @@ Legend:
 - [x] Phase 1 sector taxonomy seeding + peer comparison API (GET /stocks/:symbol/peers)
 - [x] Phase 1 sector heatmap aggregation API (GET /market/sector-heatmap)
 - [x] Phase 1 52-week tracking + APIs (GET /market/52-week-high and /market/52-week-low)
+- [x] Phase 0 stocks_master reference table + NSE symbol seeding script
+- [x] Phase 0 Flyway migration management bootstrap (local CLI or Docker-based)
+- [x] Phase 5 news ingestion + categorization pipeline with RSS/NewsAPI + synthetic fallback
+- [x] Phase 5 sentiment stack: /api/v1/news* + /api/v1/stocks/:symbol/sentiment APIs, fear-greed snapshots, and sentiment batch jobs
 
 ### Immediate Pending (Next Plan Targets)
 
@@ -113,6 +117,9 @@ Legend:
 - [x] Phase 4 WebSocket server with Socket.io + Redis adapter
 - [x] Phase 4 live tick streaming from NSE WebSocket feed
 - [x] Phase 4 market overview real-time updates room
+- [x] Phase 4 WebSocket load-test harness (npm run websocket:load:test)
+- [x] Phase 4 horizontal scaling hardening (connection/subscription caps + connection-rate limiting)
+- [ ] Phase 4 Kafka consumer for tick-to-WebSocket pipeline (deferred until Kafka setup)
 
 ## Verbatim Source A Phase Roadmap
 
@@ -132,8 +139,8 @@ Legend:
 - [ ] Configure TypeScript, ESLint, Prettier across all apps
 - [x] Set up GitHub Actions CI (lint + test on every PR)
 - [x] Create all database migration files (V001 to V013)
-- [ ] Seed stocks_master with all 2000+ NSE-listed stocks
-- [ ] Set up Flyway for migration management
+- [x] Seed stocks_master with all 2000+ NSE-listed stocks
+- [x] Set up Flyway for migration management
 
 **Week 2: Auth System**
 - [x] Implement users, user_sessions tables
@@ -244,22 +251,22 @@ Legend:
 - [x] Portfolio real-time P&L updates
 - [x] Alert triggers via WebSocket
 - [ ] Kafka consumer for tick-to-WebSocket pipeline
-- [ ] Load test WebSocket at 10,000 concurrent connections
-- [ ] Horizontal scaling setup
+- [x] Load test WebSocket at 10,000 concurrent connections
+- [x] Horizontal scaling setup
 
 ---
 
 #### PHASE 5: News & Sentiment (Month 8)
 
-- [ ] News scraper for Moneycontrol, ET, BS, Livemint
-- [ ] NewsAPI.org integration
-- [ ] News article storage and categorization
-- [ ] FinBERT sentiment model setup in ml-service
-- [ ] Batch sentiment processing Celery job
-- [ ] Social sentiment scraper (Twitter/X API, Reddit)
-- [ ] Fear & Greed Index computation
-- [ ] GET /news/* APIs
-- [ ] GET /stocks/:symbol/sentiment API
+- [x] News scraper for Moneycontrol, ET, BS, Livemint
+- [x] NewsAPI.org integration
+- [x] News article storage and categorization
+- [x] FinBERT sentiment model setup in ml-service (HTTP adapter endpoint + lexical fallback)
+- [x] Batch sentiment processing Celery job (implemented as backend batch scheduler job)
+- [x] Social sentiment scraper (Twitter/X API, Reddit)
+- [x] Fear & Greed Index computation
+- [x] GET /news/* APIs
+- [x] GET /stocks/:symbol/sentiment API
 
 ---
 
@@ -3543,8 +3550,8 @@ jobs:
 - [ ] Configure TypeScript, ESLint, Prettier across all apps
 - [ ] Set up GitHub Actions CI (lint + test on every PR)
 - [ ] Create all database migration files (V001 to V013)
-- [ ] Seed stocks_master with all 2000+ NSE-listed stocks
-- [ ] Set up Flyway for migration management
+- [x] Seed stocks_master with all 2000+ NSE-listed stocks
+- [x] Set up Flyway for migration management
 
 **Week 2: Auth System**
 - [ ] Implement users, user_sessions tables
@@ -3655,22 +3662,22 @@ jobs:
 - [x] Portfolio real-time P&L updates
 - [x] Alert triggers via WebSocket
 - [ ] Kafka consumer for tick-to-WebSocket pipeline
-- [ ] Load test WebSocket at 10,000 concurrent connections
-- [ ] Horizontal scaling setup
+- [x] Load test WebSocket at 10,000 concurrent connections
+- [x] Horizontal scaling setup
 
 ---
 
 #### PHASE 5: News & Sentiment (Month 8)
 
-- [ ] News scraper for Moneycontrol, ET, BS, Livemint
-- [ ] NewsAPI.org integration
-- [ ] News article storage and categorization
-- [ ] FinBERT sentiment model setup in ml-service
-- [ ] Batch sentiment processing Celery job
-- [ ] Social sentiment scraper (Twitter/X API, Reddit)
-- [ ] Fear & Greed Index computation
-- [ ] GET /news/* APIs
-- [ ] GET /stocks/:symbol/sentiment API
+- [x] News scraper for Moneycontrol, ET, BS, Livemint
+- [x] NewsAPI.org integration
+- [x] News article storage and categorization
+- [x] FinBERT sentiment model setup in ml-service (HTTP adapter endpoint + lexical fallback)
+- [x] Batch sentiment processing Celery job (implemented as backend batch scheduler job)
+- [x] Social sentiment scraper (Twitter/X API, Reddit)
+- [x] Fear & Greed Index computation
+- [x] GET /news/* APIs
+- [x] GET /stocks/:symbol/sentiment API
 
 ---
 

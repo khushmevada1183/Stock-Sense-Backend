@@ -8,6 +8,7 @@ const notificationsRoutes = require('../../modules/notifications/notifications.r
 const ipoRoutes = require('../../modules/ipo/ipo.routes');
 const institutionalRoutes = require('../../modules/institutional/institutional.routes');
 const marketRoutes = require('../../modules/market/market.routes');
+const newsRoutes = require('../../modules/news/news.routes');
 const authRoutes = require('../../modules/auth/auth.routes');
 
 const router = express.Router();
@@ -22,5 +23,6 @@ router.use('/notifications', notificationsRoutes);
 router.use('/ipo', ipoRoutes);
 router.use('/institutional', institutionalRoutes);
 router.use('/market', marketRoutes);
+router.use('/news', newsRoutes);
 
 module.exports = router;

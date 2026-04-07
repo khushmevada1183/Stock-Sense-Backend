@@ -638,6 +638,24 @@ async function searchStocks(query) {
   return getData('/stock', { name: query });
 }
 
+/**
+ * Get all NSE equity symbols.
+ * @returns {Promise<string[]>} - Array of symbols
+ */
+async function getAllStockSymbols() {
+  const result = await callNSEIndia('getAllStockSymbols');
+
+  if (Array.isArray(result)) {
+    return result;
+  }
+
+  if (result && Array.isArray(result.data)) {
+    return result.data;
+  }
+
+  return [];
+}
+
 // ============================================================================
 // Stock-specific Data Endpoints
 // ============================================================================
@@ -938,6 +956,7 @@ const apiExports = {
   getIPOData, // Main IPO function
   getUpcomingIPOs, // Legacy alias
   searchStocks,
+  getAllStockSymbols,
   getMarketMovers,
   
   // Stock-specific data - Updated to match documented endpoints

@@ -80,10 +80,18 @@ EARNINGS_CALENDAR_SYNC_INTERVAL_MS=86400000
 WEBSOCKET_ENABLED=true
 WEBSOCKET_PATH=/socket.io
 WEBSOCKET_CORS_ORIGIN=*
+WEBSOCKET_TRANSPORTS=websocket,polling
 WEBSOCKET_PING_INTERVAL_MS=25000
 WEBSOCKET_PING_TIMEOUT_MS=20000
+WEBSOCKET_PERMESSAGE_DEFLATE_ENABLED=true
+WEBSOCKET_PERMESSAGE_DEFLATE_THRESHOLD=1024
+WEBSOCKET_MAX_CONNECTIONS=2000
+WEBSOCKET_MAX_SUBSCRIPTIONS_PER_SOCKET=50
+WEBSOCKET_CONNECT_RATE_LIMIT_WINDOW_MS=60000
+WEBSOCKET_CONNECT_RATE_LIMIT_MAX=200
 WEBSOCKET_REDIS_ADAPTER_ENABLED=true
 WEBSOCKET_REDIS_URL=redis://localhost:6379
+WEBSOCKET_INSTANCE_ID=stock-sense-local-1
 LIVE_TICK_STREAM_ENABLED=true
 LIVE_TICK_STREAM_INTERVAL_MS=15000
 LIVE_TICK_STREAM_RUN_ON_START=true
@@ -91,6 +99,18 @@ LIVE_TICK_STREAM_PERSIST_TICKS=true
 LIVE_TICK_STREAM_INCLUDE_DEFAULT_SYMBOLS=true
 LIVE_TICK_STREAM_DEFAULT_SYMBOLS=RELIANCE,TCS,INFY,HDFCBANK,ICICIBANK
 LIVE_TICK_STREAM_MAX_SYMBOLS=30
+NEWS_ENABLE_RSS=true
+NEWS_ENABLE_NEWSAPI=true
+NEWS_ENABLE_SOCIAL_SENTIMENT=true
+NEWS_SYNC_INTERVAL_MS=900000
+NEWS_SYNC_LOOKBACK_DAYS=2
+NEWS_SYNC_LIMIT_PER_SOURCE=50
+NEWS_SENTIMENT_SYNC_INTERVAL_MS=1800000
+NEWS_SENTIMENT_LOOKBACK_HOURS=72
+NEWS_SENTIMENT_BATCH_LIMIT=1000
+NEWS_SENTIMENT_MODEL=lexical
+NEWS_FINBERT_ENDPOINT=
+NEWSAPI_KEY=
 ```
 
 ## Running the API
@@ -98,6 +118,11 @@ LIVE_TICK_STREAM_MAX_SYMBOLS=30
 ```bash
 # Apply DB migrations first (Timescale + tables)
 npm run db:migrate
+
+# Optional Flyway-based migration management (uses local Flyway CLI or Docker image)
+npm run db:info:flyway
+npm run db:validate:flyway
+npm run db:migrate:flyway
 
 # Optional readiness check for DB/Timescale
 npm run db:check
@@ -116,6 +141,9 @@ npm run notifications:process:watch
 
 # Optional IPO calendar seed (upsert)
 npm run ipo:seed
+
+# Optional stocks_master seed from NSE symbol list
+npm run stocks:master:seed
 
 # Optional one-time IPO subscription scraper sync
 npm run ipo:subscriptions:sync
@@ -180,8 +208,29 @@ npm run market:ticks:watch
 # Optional websocket runtime smoke test (requires running server)
 npm run websocket:smoke
 
+# Optional websocket load test (requires running server)
+npm run websocket:load:test
+
+# Optional websocket load test tuned for higher concurrency
+WS_LOAD_CONNECTIONS=10000 WS_LOAD_BATCH_SIZE=250 WS_LOAD_BATCH_DELAY_MS=150 npm run websocket:load:test
+
 # Optional live-tick stream smoke test (requires running server)
 npm run market:ticks:smoke
+
+# Optional one-time news ingestion + sentiment/social/fear-greed snapshot sync
+npm run news:sync
+
+# Optional continuous news ingestion sync
+npm run news:watch
+
+# Optional one-time news sentiment recompute batch
+npm run news:sentiment:sync
+
+# Optional continuous news sentiment recompute batch
+npm run news:sentiment:watch
+
+# Optional news/sentiment API smoke test (requires running server)
+npm run news:sentiment:smoke
 
 # Development mode
 npm run dev
@@ -189,6 +238,12 @@ npm run dev
 # Production mode
 npm start
 ```
+
+Websocket production hardening now enforces:
+- per-instance connection cap (`WEBSOCKET_MAX_CONNECTIONS`)
+- per-socket subscription cap (`WEBSOCKET_MAX_SUBSCRIPTIONS_PER_SOCKET`)
+- connection-rate limiting (`WEBSOCKET_CONNECT_RATE_LIMIT_WINDOW_MS`, `WEBSOCKET_CONNECT_RATE_LIMIT_MAX`)
+- configurable transports (`WEBSOCKET_TRANSPORTS`) and per-message deflate compression
 
 The API will be available at `http://localhost:10000`.
 
@@ -229,6 +284,14 @@ The API will be available at `http://localhost:10000`.
 - `GET /api/v1/market/socket/status` - WebSocket server runtime and adapter status
 - `GET /api/v1/market/ticks/status` - Live tick stream scheduler/subscription status
 - `POST /api/v1/market/ticks/sync?symbols=<csv>&persist=<true|false>&includeDefaultSymbols=<true|false>` - Trigger one live tick stream cycle
+- `GET /api/v1/news?category=<category>&sentiment=<positive|negative|neutral>&symbol=<symbol>&source=<name>&from=<yyyy-mm-dd>&to=<yyyy-mm-dd>&q=<text>&page=<n>&limit=<n>` - Paginated news feed with filtering
+- `GET /api/v1/news/category/:category?limit=<n>&page=<n>` - Category-specific feed
+- `GET /api/v1/news/trending?hours=<n>&limit=<n>&category=<category>&symbol=<symbol>` - Impact-ranked trending news
+- `GET /api/v1/news/alerts?hours=<n>&minConfidence=<0..1>&minScore=<0..1>&symbol=<symbol>&limit=<n>` - High-confidence sentiment alerts
+- `POST /api/v1/news/sync?days=<n>&limitPerSource=<n>&includeNewsApi=<bool>&includeRss=<bool>&includeSocial=<bool>&category=<category>` - Trigger news ingestion sync
+- `POST /api/v1/news/sentiment/sync?hours=<n>&limit=<n>` - Trigger sentiment recompute batch
+- `GET /api/v1/news/fear-greed?days=<n>` - Fear & Greed history and latest snapshot
+- `GET /api/v1/stocks/:symbol/sentiment?days=<n>&limit=<n>&platform=<twitter|reddit|news|aggregate>` - Stock-level sentiment summary + history
 
 ### Health Check
 - `GET /api/health` - Check server status

@@ -21,6 +21,9 @@ pids
 *.seed
 *.pid.lock
 
+# Generated Flyway staging directory
+.flyway/
+
 # Coverage directory used by tools like istanbul
 coverage/
 

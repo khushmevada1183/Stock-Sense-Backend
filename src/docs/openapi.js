@@ -44,7 +44,7 @@ const openApiSpec = {
     title: 'Stock Sense Backend API',
     version: '1.0.0',
     description:
-      'Official API documentation for Stock Sense backend. Includes auth, portfolios, watchlists, alerts, notifications, IPO and institutional flow APIs, market snapshots, stock tick ingestion, and Timescale candle history APIs.',
+      'Official API documentation for Stock Sense backend. Includes auth, portfolios, watchlists, alerts, notifications, IPO and institutional flow APIs, news/sentiment intelligence APIs, market snapshots, stock tick ingestion, and Timescale candle history APIs.',
   },
   servers: [
     {
@@ -62,6 +62,7 @@ const openApiSpec = {
     { name: 'IPO', description: 'IPO calendar APIs and seeded issue data' },
     { name: 'Institutional', description: 'FII/DII flows, block deals, mutual-fund holdings, insider trades, shareholding patterns, corporate actions, earnings calendar, and institutional data aggregates' },
     { name: 'Stocks', description: 'Stock tick ingestion and candle history reads' },
+    { name: 'News', description: 'News feed, sentiment scoring, and fear-greed intelligence' },
     { name: 'Market', description: 'Market snapshot ingestion and reads' },
   ],
   paths: {
@@ -2975,6 +2976,152 @@ const openApiSpec = {
           { name: 'to', in: 'query', schema: { type: 'string', format: 'date-time' } },
           { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
           { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 1440 } },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+    '/api/v1/news': {
+      get: {
+        tags: ['News'],
+        summary: 'Get paginated news feed with filtering and text search',
+        parameters: [
+          { name: 'category', in: 'query', schema: { type: 'string' } },
+          {
+            name: 'sentiment',
+            in: 'query',
+            schema: { type: 'string', enum: ['positive', 'negative', 'neutral'] },
+          },
+          { name: 'symbol', in: 'query', schema: { type: 'string' } },
+          { name: 'source', in: 'query', schema: { type: 'string' } },
+          { name: 'from', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'to', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'q', in: 'query', schema: { type: 'string' } },
+          { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 25 } },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+    '/api/v1/news/category/{category}': {
+      get: {
+        tags: ['News'],
+        summary: 'Get paginated news feed for a specific category',
+        parameters: [
+          {
+            name: 'category',
+            in: 'path',
+            required: true,
+            schema: {
+              type: 'string',
+              enum: ['companies', 'markets', 'economy', 'ipos', 'commodities', 'global', 'regulatory', 'general'],
+            },
+          },
+          { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 25 } },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+    '/api/v1/news/trending': {
+      get: {
+        tags: ['News'],
+        summary: 'Get impact-ranked trending news',
+        parameters: [
+          { name: 'hours', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 336, default: 24 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 } },
+          { name: 'category', in: 'query', schema: { type: 'string' } },
+          { name: 'symbol', in: 'query', schema: { type: 'string' } },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+    '/api/v1/news/alerts': {
+      get: {
+        tags: ['News'],
+        summary: 'Get high-confidence sentiment alerts from recent news',
+        parameters: [
+          { name: 'hours', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 168, default: 12 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 } },
+          { name: 'minConfidence', in: 'query', schema: { type: 'number', minimum: 0, maximum: 1, default: 0.65 } },
+          { name: 'minScore', in: 'query', schema: { type: 'number', minimum: 0, maximum: 1, default: 0.4 } },
+          { name: 'symbol', in: 'query', schema: { type: 'string' } },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+    '/api/v1/news/sync': {
+      post: {
+        tags: ['News'],
+        summary: 'Trigger news ingestion and sentiment/social/fear-greed refresh',
+        parameters: [
+          { name: 'days', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 30, default: 2 } },
+          { name: 'limitPerSource', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 300, default: 50 } },
+          { name: 'includeNewsApi', in: 'query', schema: { type: 'boolean', default: true } },
+          { name: 'includeRss', in: 'query', schema: { type: 'boolean', default: true } },
+          { name: 'includeSocial', in: 'query', schema: { type: 'boolean', default: true } },
+          { name: 'category', in: 'query', schema: { type: 'string' } },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+    '/api/v1/news/sentiment/sync': {
+      post: {
+        tags: ['News'],
+        summary: 'Trigger batch sentiment recomputation for recent news',
+        parameters: [
+          { name: 'hours', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 720, default: 72 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 5000, default: 1000 } },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+    '/api/v1/news/fear-greed': {
+      get: {
+        tags: ['News'],
+        summary: 'Get fear-greed history and latest snapshot',
+        parameters: [
+          { name: 'days', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 365, default: 30 } },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+    '/api/v1/stocks/{symbol}/sentiment': {
+      get: {
+        tags: ['News'],
+        summary: 'Get stock-level sentiment summary, history, and social snapshots',
+        parameters: [
+          { name: 'symbol', in: 'path', required: true, schema: { type: 'string' } },
+          { name: 'days', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 365, default: 14 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 365, default: 30 } },
+          {
+            name: 'platform',
+            in: 'query',
+            schema: { type: 'string', enum: ['twitter', 'reddit', 'news', 'aggregate'] },
+          },
         ],
         responses: {
           200: successResponse,

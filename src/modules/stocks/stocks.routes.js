@@ -16,6 +16,9 @@ const {
   getFundamentalsStatus,
   runFundamentalsSync,
 } = require('./fundamentals/fundamentals.controller');
+const {
+  getStockSentimentForSymbol,
+} = require('../news/news.controller');
 const tickRoutes = require('./ticks/ticks.routes');
 
 const router = express.Router();
@@ -25,6 +28,7 @@ router.get('/technical/status', getTechnicalSchedulerStatus);
 router.post('/technical/recompute', runTechnicalRecompute);
 router.get('/fundamentals/status', getFundamentalsStatus);
 router.post('/fundamentals/sync', runFundamentalsSync);
+router.get('/:symbol/sentiment', getStockSentimentForSymbol);
 router.get('/:symbol/technical', getTechnical);
 router.get('/:symbol/fundamental', getFundamental);
 router.get('/:symbol/financials', getFinancials);
