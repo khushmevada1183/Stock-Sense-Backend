@@ -6,6 +6,8 @@ const {
   normalizePortfolioUpdatePayload,
   normalizePortfolioTransactionPayload,
   normalizeHoldingsQuery,
+  normalizePerformanceQuery,
+  normalizeXirrQuery,
 } = require('./portfolio.validation');
 const {
   getUserPortfolios,
@@ -14,6 +16,8 @@ const {
   deleteUserPortfolio,
   getUserPortfolioHoldings,
   getUserPortfolioSummary,
+  getUserPortfolioXirr,
+  getUserPortfolioPerformance,
   getUserPortfolioDetails,
   createPortfolioTransaction,
 } = require('./portfolio.service');
@@ -86,6 +90,16 @@ const getUserIdFromRequest = (req) => {
   }
 
   return String(userId);
+};
+
+const ensurePortfolioExists = async (userId, portfolioId) => {
+  const details = await getUserPortfolioDetails(userId, portfolioId);
+
+  if (!details) {
+    throw new ApiError('Portfolio not found', 404, 'ERR_PORTFOLIO_NOT_FOUND');
+  }
+
+  return details;
 };
 
 const listPortfolios = asyncHandler(async (req, res) => {
@@ -204,15 +218,45 @@ const getSummary = asyncHandler(async (req, res) => {
   });
 });
 
+const getPerformance = asyncHandler(async (req, res) => {
+  const { userId, portfolioId } = normalizeHoldingsQuery({
+    userId: getUserIdFromRequest(req),
+    portfolioId: req.query.portfolioId,
+  });
+
+  const query = normalizePerformanceQuery(req.query);
+  const performance = await getUserPortfolioPerformance(userId, portfolioId, query);
+
+  res.status(200).json({
+    success: true,
+    data: {
+      performance,
+    },
+  });
+});
+
+const getXirr = asyncHandler(async (req, res) => {
+  const { userId, portfolioId } = normalizeHoldingsQuery({
+    userId: getUserIdFromRequest(req),
+    portfolioId: req.query.portfolioId,
+  });
+
+  const query = normalizeXirrQuery(req.query);
+  const xirr = await getUserPortfolioXirr(userId, portfolioId, query);
+
+  res.status(200).json({
+    success: true,
+    data: {
+      xirr,
+    },
+  });
+});
+
 const getPortfolioHoldings = asyncHandler(async (req, res) => {
   const userId = getUserIdFromRequest(req);
   const portfolioId = normalizePortfolioId(req.params.portfolioId);
 
-  const details = await getUserPortfolioDetails(userId, portfolioId);
-
-  if (!details) {
-    throw new ApiError('Portfolio not found', 404, 'ERR_PORTFOLIO_NOT_FOUND');
-  }
+  const details = await ensurePortfolioExists(userId, portfolioId);
 
   res.status(200).json({
     success: true,
@@ -226,16 +270,46 @@ const getPortfolioSummary = asyncHandler(async (req, res) => {
   const userId = getUserIdFromRequest(req);
   const portfolioId = normalizePortfolioId(req.params.portfolioId);
 
-  const details = await getUserPortfolioDetails(userId, portfolioId);
-
-  if (!details) {
-    throw new ApiError('Portfolio not found', 404, 'ERR_PORTFOLIO_NOT_FOUND');
-  }
+  const details = await ensurePortfolioExists(userId, portfolioId);
 
   res.status(200).json({
     success: true,
     data: {
       summary: details.summary,
+    },
+  });
+});
+
+const getPortfolioPerformance = asyncHandler(async (req, res) => {
+  const userId = getUserIdFromRequest(req);
+  const portfolioId = normalizePortfolioId(req.params.portfolioId);
+
+  await ensurePortfolioExists(userId, portfolioId);
+
+  const query = normalizePerformanceQuery(req.query);
+  const performance = await getUserPortfolioPerformance(userId, portfolioId, query);
+
+  res.status(200).json({
+    success: true,
+    data: {
+      performance,
+    },
+  });
+});
+
+const getPortfolioXirr = asyncHandler(async (req, res) => {
+  const userId = getUserIdFromRequest(req);
+  const portfolioId = normalizePortfolioId(req.params.portfolioId);
+
+  await ensurePortfolioExists(userId, portfolioId);
+
+  const query = normalizeXirrQuery(req.query);
+  const xirr = await getUserPortfolioXirr(userId, portfolioId, query);
+
+  res.status(200).json({
+    success: true,
+    data: {
+      xirr,
     },
   });
 });
@@ -305,8 +379,12 @@ module.exports = {
   removePortfolio,
   getHoldings,
   getSummary,
+  getPerformance,
+  getXirr,
   getPortfolioHoldings,
   getPortfolioSummary,
+  getPortfolioPerformance,
+  getPortfolioXirr,
   exportPortfolioCsv,
   addTransaction,
 };

@@ -2,8 +2,8 @@
 
 const {
   scrapeAndStoreShareholdingPatterns,
-} = require('../src/modules/institutional/institutional.service');
-const { closePool } = require('../src/db/client');
+} = require('../../src/modules/institutional/institutional.service');
+const { closePool } = require('../../src/db/client');
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:10000';
 

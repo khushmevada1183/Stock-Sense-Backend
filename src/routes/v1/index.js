@@ -1,6 +1,6 @@
 const express = require('express');
 const healthRoutes = require('../../modules/health/health.routes');
-const stockTickRoutes = require('../../modules/stocks/ticks/ticks.routes');
+const stockRoutes = require('../../modules/stocks/stocks.routes');
 const portfolioRoutes = require('../../modules/portfolio/portfolio.routes');
 const watchlistRoutes = require('../../modules/watchlists/watchlists.routes');
 const alertsRoutes = require('../../modules/alerts/alerts.routes');
@@ -14,7 +14,7 @@ const router = express.Router();
 
 router.use('/health', healthRoutes);
 router.use('/auth', authRoutes);
-router.use('/stocks', stockTickRoutes);
+router.use('/stocks', stockRoutes);
 router.use('/portfolios', portfolioRoutes);
 router.use('/watchlists', watchlistRoutes);
 router.use('/alerts', alertsRoutes);

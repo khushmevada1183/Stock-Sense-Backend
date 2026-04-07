@@ -45,7 +45,7 @@ This document merges both source plans into one operationally usable phase-wise 
 - Delivery control: Each sprint/milestone should map to both a Source A phase and Source B requirement IDs.
 - Completion rule per phase: Mark phase done only after associated requirement acceptance criteria are demonstrably met.
 
-## Live Execution Status (Updated 2026-04-05)
+## Live Execution Status (Updated 2026-04-07)
 
 Legend:
 - [x] Completed
@@ -55,13 +55,20 @@ Legend:
 
 - [ ] Phase 0 complete
 - [ ] Phase 1 complete
-- [ ] Phase 2 complete
+- [x] Phase 2 complete
 
 ### Recently Completed (Backend)
 
 - [x] Portfolio user isolation via JWT auth context
 - [x] Portfolio CSV export endpoint
 - [x] Portfolio route-based holdings and summary endpoints
+- [x] Portfolio FIFO lot-level cost basis and realized/unrealized P&L computation
+- [x] Portfolio XIRR service with aggregate and per-portfolio endpoints
+- [x] Portfolio performance chart time-series API (aggregate and per-portfolio)
+- [x] Phase 4 market overview websocket room updates wired from snapshot sync + manual sync
+- [x] Phase 4 per-stock live price rooms (stock:* room subscriptions + tick emission)
+- [x] Phase 4 portfolio real-time P&L websocket updates from live tick stream
+- [x] Phase 4 alert trigger websocket events (alerts:user:* room subscriptions + evaluator emit)
 - [x] Watchlist CRUD with reordering
 - [x] Price alert CRUD foundation (all 6 alert types)
 - [x] OpenAPI/Swagger updates for new endpoints with visual verification
@@ -78,18 +85,34 @@ Legend:
 - [x] Block deals scraper (NSE/BSE) with institutional APIs and sync job
 - [x] Mutual fund holdings data pipeline (SEBI monthly data) with institutional APIs and sync job
 - [x] Insider trading data ingestion with institutional APIs and sync job
+- [x] Standard API response builder + shared response helper middleware with request-id metadata
+- [x] Shared pagination utility (page/limit/offset + pagination metadata)
+- [x] Request context middleware with X-Request-ID propagation
+- [x] Winston structured logging baseline (ELK integration deferred)
+- [x] Phase 1 APIs: GET /market/overview, GET /market/indices/:name, GET /stocks/:symbol
+- [x] Phase 1 API baseline: GET /stocks/search (Postgres fallback active; Elasticsearch deferred to later upgrade)
+- [x] Phase 1 API baseline: GET /stocks/:symbol/quote (non-Redis fallback)
+- [x] Phase 1 technical indicators: 15+ indicators implemented with precompute storage and /stocks/:symbol/technical API
+- [x] Phase 1 technical indicators scheduler: 15-minute market-hours recompute job
+- [x] Phase 1 fundamentals: company_fundamentals + financial statement storage with ratio computation service
+- [x] Phase 1 fundamentals APIs: GET /stocks/:symbol/fundamental and GET /stocks/:symbol/financials
+- [x] Phase 1 fundamentals scheduler: recurring quarterly-results sync job (Node scheduler; Celery equivalent deferred)
+- [x] Phase 1 sector taxonomy seeding + peer comparison API (GET /stocks/:symbol/peers)
+- [x] Phase 1 sector heatmap aggregation API (GET /market/sector-heatmap)
+- [x] Phase 1 52-week tracking + APIs (GET /market/52-week-high and /market/52-week-low)
 
 ### Immediate Pending (Next Plan Targets)
 
 - [ ] Phase 0 Docker Compose stack (TimescaleDB, Redis, Kafka, Elasticsearch) (deferred for now)
 - [ ] Phase 0 Kafka topics creation (deferred for now)
+- [ ] Phase 1 Elasticsearch full-text engine (external Elasticsearch/OpenSearch service) (deferred for later upgrade; Postgres search fallback active)
 - [ ] Phase 0 Timescale upgrade for true continuous aggregate policies (currently using materialized aggregate views)
 - [x] Phase 3 shareholding pattern quarterly data
 - [x] Phase 3 corporate actions scraper
 - [x] Phase 3 earnings calendar seeding
 - [x] Phase 4 WebSocket server with Socket.io + Redis adapter
 - [x] Phase 4 live tick streaming from NSE WebSocket feed
-- [ ] Phase 4 market overview real-time updates room
+- [x] Phase 4 market overview real-time updates room
 
 ## Verbatim Source A Phase Roadmap
 
@@ -131,10 +154,10 @@ Legend:
 
 **Week 4: API Foundation**
 - [x] Express.js server with all middleware
-- [ ] Response builder utility (standard API response format)
+- [x] Response builder utility (standard API response format)
 - [x] Error handler middleware
-- [ ] Pagination utility
-- [ ] Logging (Winston + ELK)
+- [x] Pagination utility
+- [ ] Logging (Winston + ELK) (Winston baseline completed; ELK deferred)
 - [x] API documentation (Swagger/OpenAPI)
 - [ ] Deploy to staging (AWS ECS or single EC2)
 
@@ -143,35 +166,35 @@ Legend:
 #### PHASE 1: Core Stock Data APIs (Months 2-3)
 
 **Month 2, Week 1-2: Market & Stock APIs**
-- [ ] GET /market/overview (indices, breadth, gainers/losers)
-- [ ] GET /market/indices/:name with OHLCV history
-- [ ] GET /stocks/search (Elasticsearch full-text)
-- [ ] GET /stocks/:symbol (full profile)
-- [ ] GET /stocks/:symbol/quote (live price from Redis)
+- [x] GET /market/overview (indices, breadth, gainers/losers)
+- [x] GET /market/indices/:name with OHLCV history
+- [ ] GET /stocks/search (Elasticsearch full-text) (deferred for later upgrade; v1 currently uses Postgres fallback)
+- [x] GET /stocks/:symbol (full profile)
+- [ ] GET /stocks/:symbol/quote (live price from Redis) (v1 endpoint currently uses non-Redis fallback)
 - [x] GET /stocks/:symbol/history (from TimescaleDB aggregate views with hypertable fallback)
 
 **Month 2, Week 3-4: Technical Analysis**
-- [ ] Implement all 15+ technical indicators in Node.js (using `technicalindicators` library)
-- [ ] Store precomputed indicators in technical_indicators table
-- [ ] GET /stocks/:symbol/technical API
-- [ ] Background job to recompute indicators every 15 minutes (market hours)
-- [ ] Cache indicator results in Redis (60s TTL during market hours)
+- [x] Implement all 15+ technical indicators in Node.js (using `technicalindicators` library)
+- [x] Store precomputed indicators in technical_indicators table
+- [x] GET /stocks/:symbol/technical API
+- [x] Background job to recompute indicators every 15 minutes (market hours)
+- [ ] Cache indicator results in Redis (60s TTL during market hours) (60s cache active via cache manager fallback; dedicated Redis rollout deferred)
 
 **Month 3, Week 1-2: Fundamental Data**
-- [ ] Integration with Screener.in API or NSE for quarterly results
-- [ ] Populate company_fundamentals table
-- [ ] Ratio computation service (P/E, P/B, ROE, ROCE etc.)
-- [ ] GET /stocks/:symbol/fundamental API
-- [ ] GET /stocks/:symbol/financials API (statements)
-- [ ] Quarterly results sync Celery job
+- [x] Integration with Screener.in API or NSE for quarterly results (v1 uses NSE-backed legacy integration)
+- [x] Populate company_fundamentals table
+- [x] Ratio computation service (P/E, P/B, ROE, ROCE etc.)
+- [x] GET /stocks/:symbol/fundamental API
+- [x] GET /stocks/:symbol/financials API (statements)
+- [x] Quarterly results sync Celery job (implemented as Node scheduler/worker equivalent in current backend)
 
 **Month 3, Week 3-4: Peer Comparison & Sector**
-- [ ] Sector/Industry taxonomy seeding
-- [ ] GET /stocks/:symbol/peers (same sector, sorted by market cap)
-- [ ] Sector heatmap aggregation
-- [ ] GET /market/sector-heatmap API
-- [ ] 52-week high/low tracking
-- [ ] GET /market/52-week-high and /52-week-low
+- [x] Sector/Industry taxonomy seeding
+- [x] GET /stocks/:symbol/peers (same sector, sorted by market cap)
+- [x] Sector heatmap aggregation
+- [x] GET /market/sector-heatmap API
+- [x] 52-week high/low tracking
+- [x] GET /market/52-week-high and /52-week-low
 
 ---
 
@@ -180,12 +203,12 @@ Legend:
 **Month 4: Portfolio Management**
 - [x] Portfolio CRUD APIs
 - [x] Transaction recording (buy/sell)
-- [ ] FIFO cost basis computation
+- [x] FIFO cost basis computation
 - [x] Live P&L calculation
-- [ ] XIRR service implementation
+- [x] XIRR service implementation
 - [x] Sector allocation analytics
 - [x] Portfolio export (CSV)
-- [ ] Portfolio performance charts data
+- [x] Portfolio performance charts data
 
 **Month 5: Watchlists, Alerts, IPO**
 - [x] Watchlist CRUD with reordering
@@ -216,10 +239,10 @@ Legend:
 
 - [x] WebSocket server with Socket.io + Redis adapter
 - [x] Live tick streaming from NSE WebSocket feed
-- [ ] Market overview real-time updates room
-- [ ] Per-stock live price rooms
-- [ ] Portfolio real-time P&L updates
-- [ ] Alert triggers via WebSocket
+- [x] Market overview real-time updates room
+- [x] Per-stock live price rooms
+- [x] Portfolio real-time P&L updates
+- [x] Alert triggers via WebSocket
 - [ ] Kafka consumer for tick-to-WebSocket pipeline
 - [ ] Load test WebSocket at 10,000 concurrent connections
 - [ ] Horizontal scaling setup
@@ -3627,10 +3650,10 @@ jobs:
 
 - [x] WebSocket server with Socket.io + Redis adapter
 - [x] Live tick streaming from NSE WebSocket feed
-- [ ] Market overview real-time updates room
-- [ ] Per-stock live price rooms
-- [ ] Portfolio real-time P&L updates
-- [ ] Alert triggers via WebSocket
+- [x] Market overview real-time updates room
+- [x] Per-stock live price rooms
+- [x] Portfolio real-time P&L updates
+- [x] Alert triggers via WebSocket
 - [ ] Kafka consumer for tick-to-WebSocket pipeline
 - [ ] Load test WebSocket at 10,000 concurrent connections
 - [ ] Horizontal scaling setup

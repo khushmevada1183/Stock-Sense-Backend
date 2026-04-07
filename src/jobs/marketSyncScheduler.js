@@ -49,6 +49,26 @@ const state = {
 };
 
 let intervalHandle = null;
+let emitSnapshotEventFn = null;
+
+const emitSnapshotEvent = (snapshot, trigger) => {
+  if (typeof emitSnapshotEventFn !== 'function' || !snapshot) {
+    return false;
+  }
+
+  try {
+    return !!emitSnapshotEventFn({
+      ...snapshot,
+      metadata: {
+        ...(snapshot.metadata || {}),
+        websocketTrigger: trigger,
+      },
+    });
+  } catch (error) {
+    console.error(`[MARKET_SYNC] snapshot websocket emit failed: ${error.message}`);
+    return false;
+  }
+};
 
 const runMarketSyncNow = async (trigger = 'manual') => {
   if (state.inFlight) {
@@ -84,10 +104,13 @@ const runMarketSyncNow = async (trigger = 'manual') => {
         `nseMostActive=${status.nseMostActive} bseMostActive=${status.bseMostActive}`
     );
 
+    const websocketEmitted = emitSnapshotEvent(snapshot, trigger);
+
     return {
       skipped: false,
       success: true,
       trigger,
+      websocketEmitted,
       snapshot,
     };
   } catch (error) {
@@ -125,6 +148,10 @@ const startMarketSyncScheduler = (options = {}) => {
   const enabled = parseBoolean(options.enabled, DEFAULT_ENABLED);
   const intervalMs = parsePositiveInt(options.intervalMs, DEFAULT_INTERVAL_MS);
   const runOnStart = parseBoolean(options.runOnStart, DEFAULT_RUN_ON_START);
+
+  if (typeof options.emitSnapshotEvent === 'function') {
+    emitSnapshotEventFn = options.emitSnapshotEvent;
+  }
 
   state.enabled = enabled;
   state.intervalMs = intervalMs;

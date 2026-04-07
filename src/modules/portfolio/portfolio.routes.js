@@ -8,8 +8,12 @@ const {
   removePortfolio,
   getHoldings,
   getSummary,
+  getPerformance,
+  getXirr,
   getPortfolioHoldings,
   getPortfolioSummary,
+  getPortfolioPerformance,
+  getPortfolioXirr,
   exportPortfolioCsv,
   addTransaction,
 } = require('./portfolio.controller');
@@ -24,9 +28,13 @@ router.post('/', createPortfolio);
 router.get('/export', exportPortfolioCsv);
 router.get('/holdings', getHoldings);
 router.get('/summary', getSummary);
+router.get('/performance', getPerformance);
+router.get('/xirr', getXirr);
 
 router.get('/:portfolioId/holdings', getPortfolioHoldings);
 router.get('/:portfolioId/summary', getPortfolioSummary);
+router.get('/:portfolioId/performance', getPortfolioPerformance);
+router.get('/:portfolioId/xirr', getPortfolioXirr);
 router.get('/:portfolioId', getPortfolioDetails);
 router.put('/:portfolioId', updatePortfolio);
 router.delete('/:portfolioId', removePortfolio);

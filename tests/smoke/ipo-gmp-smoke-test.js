@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 
-const { seedIpoCalendar, scrapeAndStoreIpoSubscriptions } = require('../src/modules/ipo/ipo.service');
-const { closePool } = require('../src/db/client');
+const { seedIpoCalendar, scrapeAndStoreIpoGmp } = require('../../src/modules/ipo/ipo.service');
+const { closePool } = require('../../src/db/client');
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:10000';
 
@@ -25,32 +25,32 @@ const assertStatus = (label, actual, expected) => {
 };
 
 const run = async () => {
-  await seedIpoCalendar({ source: 'smoke_seed_ipo_subscription' });
+  await seedIpoCalendar({ source: 'smoke_seed_ipo_gmp' });
 
-  const scrapeResult = await scrapeAndStoreIpoSubscriptions({
-    source: 'smoke_scraper_ipo_subscription',
+  const scrapeResult = await scrapeAndStoreIpoGmp({
+    source: 'smoke_scraper_ipo_gmp',
   });
 
   if (scrapeResult.savedCount < 1) {
-    throw new Error('expected scraper to save at least one ipo subscription snapshot');
+    throw new Error('expected scraper to save at least one ipo gmp snapshot');
   }
 
-  const latestResponse = await requestJson('/api/v1/ipo/subscriptions/latest?limit=5');
-  assertStatus('ipo subscriptions latest', latestResponse.response.status, 200);
+  const latestResponse = await requestJson('/api/v1/ipo/gmp/latest?limit=5');
+  assertStatus('ipo gmp latest', latestResponse.response.status, 200);
 
   const snapshots = latestResponse.body?.data?.snapshots || [];
   if (snapshots.length < 1) {
-    throw new Error('expected at least one subscription snapshot in latest list');
+    throw new Error('expected at least one gmp snapshot in latest list');
   }
 
   const sample = snapshots[0];
 
-  const historyResponse = await requestJson(`/api/v1/ipo/${sample.ipoId}/subscription?limit=10`);
-  assertStatus('ipo subscription history', historyResponse.response.status, 200);
+  const historyResponse = await requestJson(`/api/v1/ipo/${sample.ipoId}/gmp?limit=10`);
+  assertStatus('ipo gmp history', historyResponse.response.status, 200);
 
   const latestForIpo = historyResponse.body?.data?.latest;
   if (!latestForIpo) {
-    throw new Error('expected latest subscription snapshot for ipo');
+    throw new Error('expected latest gmp snapshot for ipo');
   }
 
   console.log(
@@ -60,7 +60,7 @@ const run = async () => {
         scrapeSnapshotDate: scrapeResult.snapshotDate,
         latestCount: snapshots.length,
         sampleIpoId: sample.ipoId,
-        latestTotalSubscribed: latestForIpo.totalSubscribed,
+        latestGmpPercent: latestForIpo.gmpPercent,
       },
       null,
       2

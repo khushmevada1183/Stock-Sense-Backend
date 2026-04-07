@@ -117,6 +117,7 @@ const state = {
 
 let intervalHandle = null;
 let emitEventFn = null;
+let onTickFn = null;
 let nseClient = null;
 const subscriptionCounts = new Map();
 
@@ -196,6 +197,14 @@ const emitTick = (tick) => {
     pChange: tick.metadata?.pChange || null,
     source: tick.source,
   }, 'market:overview');
+
+  if (typeof onTickFn === 'function') {
+    Promise.resolve(onTickFn(tick)).catch((error) => {
+      console.error(
+        `[LIVE_TICK_STREAM] onTick callback failed for symbol=${tick.symbol}: ${error.message}`
+      );
+    });
+  }
 
   return stockEmitted;
 };
@@ -382,6 +391,10 @@ const startLiveTickStreamScheduler = (options = {}) => {
 
   if (typeof options.emitEvent === 'function') {
     emitEventFn = options.emitEvent;
+  }
+
+  if (typeof options.onTick === 'function') {
+    onTickFn = options.onTick;
   }
 
   state.enabled = enabled;

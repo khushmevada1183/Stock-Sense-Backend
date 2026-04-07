@@ -1,4 +1,4 @@
-const { evaluateActiveAlerts } = require('../modules/alerts/alerts.service');
+const { recomputeTechnicalIndicatorsBatch } = require('../modules/stocks/technical/technical.service');
 
 const parsePositiveInt = (value, fallback) => {
   const parsed = Number.parseInt(value, 10);
@@ -51,15 +51,15 @@ const parseWeekdays = (value, fallback) => {
   return parsed.length > 0 ? [...new Set(parsed)] : fallback;
 };
 
-const DEFAULT_INTERVAL_MS = parsePositiveInt(process.env.ALERT_EVALUATOR_INTERVAL_MS, 30000);
-const DEFAULT_ENABLED = parseBoolean(process.env.ALERT_EVALUATOR_ENABLED, true);
-const DEFAULT_RUN_ON_START = parseBoolean(process.env.ALERT_EVALUATOR_RUN_ON_START, true);
-const DEFAULT_MARKET_HOURS_ONLY = parseBoolean(process.env.ALERT_EVALUATOR_MARKET_HOURS_ONLY, true);
-const DEFAULT_FORCE_RUN = parseBoolean(process.env.ALERT_EVALUATOR_FORCE_RUN, false);
-const DEFAULT_TIMEZONE = process.env.ALERT_MARKET_TIMEZONE || 'Asia/Kolkata';
-const DEFAULT_MARKET_OPEN_HHMM = parseHHMM(process.env.ALERT_MARKET_OPEN_HHMM, 915);
-const DEFAULT_MARKET_CLOSE_HHMM = parseHHMM(process.env.ALERT_MARKET_CLOSE_HHMM, 1530);
-const DEFAULT_MARKET_WEEKDAYS = parseWeekdays(process.env.ALERT_MARKET_WEEKDAYS, [1, 2, 3, 4, 5]);
+const DEFAULT_INTERVAL_MS = parsePositiveInt(process.env.TECHNICAL_INDICATOR_INTERVAL_MS, 15 * 60 * 1000);
+const DEFAULT_ENABLED = parseBoolean(process.env.TECHNICAL_INDICATOR_SCHEDULER_ENABLED, true);
+const DEFAULT_RUN_ON_START = parseBoolean(process.env.TECHNICAL_INDICATOR_RUN_ON_START, false);
+const DEFAULT_MARKET_HOURS_ONLY = parseBoolean(process.env.TECHNICAL_INDICATOR_MARKET_HOURS_ONLY, true);
+const DEFAULT_FORCE_RUN = parseBoolean(process.env.TECHNICAL_INDICATOR_FORCE_RUN, false);
+const DEFAULT_TIMEZONE = process.env.TECHNICAL_INDICATOR_MARKET_TIMEZONE || 'Asia/Kolkata';
+const DEFAULT_MARKET_OPEN_HHMM = parseHHMM(process.env.TECHNICAL_INDICATOR_MARKET_OPEN_HHMM, 915);
+const DEFAULT_MARKET_CLOSE_HHMM = parseHHMM(process.env.TECHNICAL_INDICATOR_MARKET_CLOSE_HHMM, 1530);
+const DEFAULT_MARKET_WEEKDAYS = parseWeekdays(process.env.TECHNICAL_INDICATOR_MARKET_WEEKDAYS, [1, 2, 3, 4, 5]);
 
 const state = {
   enabled: DEFAULT_ENABLED,
@@ -89,11 +89,9 @@ const state = {
   totalSuccesses: 0,
   totalFailures: 0,
   totalSkips: 0,
-  consecutiveFailures: 0,
 };
 
 let intervalHandle = null;
-let onTriggeredAlertsFn = null;
 
 const getMarketClock = (timeZone) => {
   const zonedNow = new Date(new Date().toLocaleString('en-US', { timeZone }));
@@ -139,11 +137,11 @@ const isWithinMarketWindow = () => {
   };
 };
 
-const runAlertEvaluationNow = async (trigger = 'manual', options = {}) => {
+const runTechnicalIndicatorRecomputeNow = async (trigger = 'manual', options = {}) => {
   if (state.inFlight) {
     return {
       skipped: true,
-      reason: 'evaluation-in-flight',
+      reason: 'recompute-in-flight',
       trigger,
     };
   }
@@ -173,27 +171,30 @@ const runAlertEvaluationNow = async (trigger = 'manual', options = {}) => {
   const startedAtMs = Date.now();
 
   try {
-    const summary = await evaluateActiveAlerts({
-      onTriggeredAlerts: onTriggeredAlertsFn,
-    });
+    const summary = await recomputeTechnicalIndicatorsBatch(options);
 
     state.lastRunCompletedAt = new Date().toISOString();
-    state.lastSuccessAt = state.lastRunCompletedAt;
     state.lastDurationMs = Date.now() - startedAtMs;
-    state.lastError = null;
     state.lastSummary = summary;
-    state.totalSuccesses += 1;
-    state.consecutiveFailures = 0;
+
+    if (summary.failures > 0) {
+      state.lastFailureAt = state.lastRunCompletedAt;
+      state.lastError = `${summary.failures} task(s) failed`;
+      state.totalFailures += 1;
+    } else {
+      state.lastSuccessAt = state.lastRunCompletedAt;
+      state.lastError = null;
+      state.totalSuccesses += 1;
+    }
 
     console.log(
-      `[ALERT_EVALUATOR] trigger=${trigger} active=${summary.activeAlertCount} ` +
-        `checked=${summary.checkedCount} triggered=${summary.triggeredCount} ` +
-        `skippedCooldown=${summary.skippedCooldownCount} missingMarketData=${summary.missingMarketDataCount}`
+      `[TECHNICAL_INDICATORS] trigger=${trigger} tasks=${summary.totalTasks} ` +
+        `successes=${summary.successes} skipped=${summary.skipped} failures=${summary.failures}`
     );
 
     return {
       skipped: false,
-      success: true,
+      success: summary.failures === 0,
       trigger,
       summary,
     };
@@ -203,9 +204,8 @@ const runAlertEvaluationNow = async (trigger = 'manual', options = {}) => {
     state.lastDurationMs = Date.now() - startedAtMs;
     state.lastError = error.message;
     state.totalFailures += 1;
-    state.consecutiveFailures += 1;
 
-    console.error(`[ALERT_EVALUATOR] trigger=${trigger} failed: ${error.message}`);
+    console.error(`[TECHNICAL_INDICATORS] trigger=${trigger} failed: ${error.message}`);
 
     return {
       skipped: false,
@@ -218,7 +218,7 @@ const runAlertEvaluationNow = async (trigger = 'manual', options = {}) => {
   }
 };
 
-const getAlertEvaluatorSchedulerStatus = () => {
+const getTechnicalIndicatorSchedulerStatus = () => {
   const startedAtMs = state.startedAt ? new Date(state.startedAt).getTime() : null;
   const marketWindow = isWithinMarketWindow();
 
@@ -230,7 +230,7 @@ const getAlertEvaluatorSchedulerStatus = () => {
   };
 };
 
-const startAlertEvaluatorScheduler = (options = {}) => {
+const startTechnicalIndicatorScheduler = (options = {}) => {
   const enabled = parseBoolean(options.enabled, DEFAULT_ENABLED);
   const intervalMs = parsePositiveInt(options.intervalMs, DEFAULT_INTERVAL_MS);
   const runOnStart = parseBoolean(options.runOnStart, DEFAULT_RUN_ON_START);
@@ -250,7 +250,6 @@ const startAlertEvaluatorScheduler = (options = {}) => {
   state.marketOpenHHMM = marketOpenHHMM;
   state.marketCloseHHMM = marketCloseHHMM;
   state.marketWeekdays = marketWeekdays;
-  onTriggeredAlertsFn = typeof options.onTriggeredAlerts === 'function' ? options.onTriggeredAlerts : null;
 
   if (!enabled) {
     if (intervalHandle) {
@@ -260,52 +259,52 @@ const startAlertEvaluatorScheduler = (options = {}) => {
 
     state.running = false;
     state.timerActive = false;
-    return getAlertEvaluatorSchedulerStatus();
+    return getTechnicalIndicatorSchedulerStatus();
   }
 
   if (intervalHandle) {
-    return getAlertEvaluatorSchedulerStatus();
+    return getTechnicalIndicatorSchedulerStatus();
   }
 
   state.running = true;
   state.startedAt = new Date().toISOString();
 
   console.log(
-    `[ALERT_EVALUATOR] Scheduler started. interval=${intervalMs}ms ` +
-      `runOnStart=${runOnStart} marketHoursOnly=${marketHoursOnly} tz=${marketTimeZone}`
+    `[TECHNICAL_INDICATORS] Scheduler started. interval=${intervalMs}ms ` +
+      `runOnStart=${runOnStart} marketHoursOnly=${marketHoursOnly}`
   );
 
   intervalHandle = setInterval(() => {
-    runAlertEvaluationNow('interval').catch((error) => {
-      console.error(`[ALERT_EVALUATOR] Interval execution failed: ${error.message}`);
+    runTechnicalIndicatorRecomputeNow('interval').catch((error) => {
+      console.error(`[TECHNICAL_INDICATORS] Interval execution failed: ${error.message}`);
     });
   }, intervalMs);
 
   if (runOnStart) {
-    runAlertEvaluationNow('startup').catch((error) => {
-      console.error(`[ALERT_EVALUATOR] Startup evaluation failed: ${error.message}`);
+    runTechnicalIndicatorRecomputeNow('startup').catch((error) => {
+      console.error(`[TECHNICAL_INDICATORS] Startup recompute failed: ${error.message}`);
     });
   }
 
-  return getAlertEvaluatorSchedulerStatus();
+  return getTechnicalIndicatorSchedulerStatus();
 };
 
-const stopAlertEvaluatorScheduler = () => {
+const stopTechnicalIndicatorScheduler = () => {
   if (intervalHandle) {
     clearInterval(intervalHandle);
     intervalHandle = null;
-    console.log('[ALERT_EVALUATOR] Scheduler stopped.');
+    console.log('[TECHNICAL_INDICATORS] Scheduler stopped.');
   }
 
   state.running = false;
   state.timerActive = false;
 
-  return getAlertEvaluatorSchedulerStatus();
+  return getTechnicalIndicatorSchedulerStatus();
 };
 
 module.exports = {
-  runAlertEvaluationNow,
-  startAlertEvaluatorScheduler,
-  stopAlertEvaluatorScheduler,
-  getAlertEvaluatorSchedulerStatus,
+  runTechnicalIndicatorRecomputeNow,
+  startTechnicalIndicatorScheduler,
+  stopTechnicalIndicatorScheduler,
+  getTechnicalIndicatorSchedulerStatus,
 };

@@ -5,7 +5,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 
 const ROOT = path.resolve(__dirname, '..');
-const TARGETS = ['server.js', 'index.js', 'src', 'scripts', 'tests'];
+const TARGETS = ['src/server.js', 'index.js', 'src', 'scripts', 'tests'];
 const SKIP_DIRS = new Set(['node_modules', '.git', '.github', '.next', 'package']);
 
 const isJavaScriptFile = (filePath) => filePath.endsWith('.js');

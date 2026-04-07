@@ -328,6 +328,7 @@ To prevent rate limiting, the API automatically rotates through multiple API key
 ```
 api/
 ├── src/
+│   ├── server.js           # Express server setup (mounts /api and /api/v1)
 │   ├── config/            # Environment and DB config
 │   ├── db/                # PG pool, migration runner, SQL migrations
 │   ├── middleware/        # Request auth/validation/rate-limit middleware
@@ -336,7 +337,6 @@ api/
 │   ├── shared/            # Shared middleware/helpers
 │   └── utils/             # Logging, cache, error, mock utilities
 ├── index.js               # Existing API routes
-├── server.js              # Express server setup (mounts /api and /api/v1)
 └── README.md              # This documentation
 ```
 

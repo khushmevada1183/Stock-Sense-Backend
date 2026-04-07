@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 
-const { evaluateActiveAlerts } = require('../src/modules/alerts/alerts.service');
-const { closePool } = require('../src/db/client');
+const { evaluateActiveAlerts } = require('../../src/modules/alerts/alerts.service');
+const { closePool } = require('../../src/db/client');
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:10000';
 

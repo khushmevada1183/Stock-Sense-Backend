@@ -53,6 +53,38 @@ let io = null;
 let redisPubClient = null;
 let redisSubClient = null;
 const socketStockSubscriptions = new Map();
+const socketPortfolioSubscriptions = new Map();
+const socketAlertSubscriptions = new Map();
+
+const normalizePortfolioId = (value) => {
+  const normalized = String(value || '').trim();
+  return /^[0-9a-fA-F-]{36}$/.test(normalized) ? normalized.toLowerCase() : null;
+};
+
+const normalizeUserId = (value) => {
+  const normalized = String(value || '').trim();
+  return /^[0-9a-fA-F-]{36}$/.test(normalized) ? normalized.toLowerCase() : null;
+};
+
+const listFromPayload = (payload) => {
+  if (!payload) {
+    return [];
+  }
+
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (typeof payload === 'object') {
+    for (const key of ['data', 'items', 'results', 'rows']) {
+      if (Array.isArray(payload[key])) {
+        return payload[key];
+      }
+    }
+  }
+
+  return [];
+};
 
 const buildCorsOrigin = () => {
   if (state.corsOrigin === '*') {
@@ -93,16 +125,42 @@ const emitMarketSnapshotEvent = (snapshot) => {
     return false;
   }
 
+  const priceShockers = snapshot.priceShockers || {};
+  const gainers = listFromPayload(
+    priceShockers.gainers ||
+      priceShockers.topGainers ||
+      priceShockers.advances ||
+      []
+  );
+  const losers = listFromPayload(
+    priceShockers.losers ||
+      priceShockers.topLosers ||
+      priceShockers.declines ||
+      []
+  );
+
+  const breadth = {
+    gainers: gainers.length,
+    losers: losers.length,
+    total: gainers.length + losers.length,
+  };
+
   return emitEvent('market:snapshot', {
     capturedAt: snapshot.capturedAt || null,
     capturedMinute: snapshot.capturedMinute || null,
     source: snapshot.source || null,
     metadata: snapshot.metadata || null,
+    breadth,
+    indices: snapshot.trending || {},
+    mostActive: {
+      nse: snapshot.nseMostActive || {},
+      bse: snapshot.bseMostActive || {},
+    },
     trendingCount: Array.isArray(snapshot.trending) ? snapshot.trending.length : 0,
     nseMostActiveCount: Array.isArray(snapshot.nseMostActive) ? snapshot.nseMostActive.length : 0,
     bseMostActiveCount: Array.isArray(snapshot.bseMostActive) ? snapshot.bseMostActive.length : 0,
     priceShockersCount: Array.isArray(snapshot.priceShockers) ? snapshot.priceShockers.length : 0,
-  });
+  }, 'market:overview');
 };
 
 const getWebSocketServerStatus = () => {
@@ -120,6 +178,8 @@ const attachSocketHandlers = () => {
     state.activeConnections += 1;
     state.totalConnections += 1;
     socketStockSubscriptions.set(socket.id, new Set());
+    socketPortfolioSubscriptions.set(socket.id, new Set());
+    socketAlertSubscriptions.set(socket.id, new Set());
 
     socket.emit('ws:connected', {
       socketId: socket.id,
@@ -215,12 +275,139 @@ const attachSocketHandlers = () => {
       }
     });
 
+    socket.on('portfolio:subscribe', (portfolioId, callback) => {
+      const normalizedPortfolioId = normalizePortfolioId(portfolioId);
+      if (!normalizedPortfolioId) {
+        if (typeof callback === 'function') {
+          callback({ ok: false, message: 'valid portfolioId is required' });
+        }
+        return;
+      }
+
+      const room = `portfolio:${normalizedPortfolioId}`;
+      const existingSubscriptions = socketPortfolioSubscriptions.get(socket.id) || new Set();
+      const alreadySubscribed = existingSubscriptions.has(normalizedPortfolioId);
+
+      if (!alreadySubscribed) {
+        existingSubscriptions.add(normalizedPortfolioId);
+        socketPortfolioSubscriptions.set(socket.id, existingSubscriptions);
+      }
+
+      socket.join(room);
+      state.roomsJoined += 1;
+
+      if (typeof callback === 'function') {
+        callback({
+          ok: true,
+          room,
+          portfolioId: normalizedPortfolioId,
+          alreadySubscribed,
+        });
+      }
+    });
+
+    socket.on('portfolio:unsubscribe', (portfolioId, callback) => {
+      const normalizedPortfolioId = normalizePortfolioId(portfolioId);
+      if (!normalizedPortfolioId) {
+        if (typeof callback === 'function') {
+          callback({ ok: false, message: 'valid portfolioId is required' });
+        }
+        return;
+      }
+
+      const room = `portfolio:${normalizedPortfolioId}`;
+      const existingSubscriptions = socketPortfolioSubscriptions.get(socket.id) || new Set();
+      const wasSubscribed = existingSubscriptions.has(normalizedPortfolioId);
+
+      if (wasSubscribed) {
+        existingSubscriptions.delete(normalizedPortfolioId);
+        socketPortfolioSubscriptions.set(socket.id, existingSubscriptions);
+      }
+
+      socket.leave(room);
+      state.roomsLeft += 1;
+
+      if (typeof callback === 'function') {
+        callback({
+          ok: true,
+          room,
+          portfolioId: normalizedPortfolioId,
+          wasSubscribed,
+        });
+      }
+    });
+
+    socket.on('alerts:subscribe', (userId, callback) => {
+      const normalizedUserId = normalizeUserId(userId);
+      if (!normalizedUserId) {
+        if (typeof callback === 'function') {
+          callback({ ok: false, message: 'valid userId is required' });
+        }
+        return;
+      }
+
+      const room = `alerts:user:${normalizedUserId}`;
+      const existingSubscriptions = socketAlertSubscriptions.get(socket.id) || new Set();
+      const alreadySubscribed = existingSubscriptions.has(normalizedUserId);
+
+      if (!alreadySubscribed) {
+        existingSubscriptions.add(normalizedUserId);
+        socketAlertSubscriptions.set(socket.id, existingSubscriptions);
+      }
+
+      socket.join(room);
+      state.roomsJoined += 1;
+
+      if (typeof callback === 'function') {
+        callback({
+          ok: true,
+          room,
+          userId: normalizedUserId,
+          alreadySubscribed,
+        });
+      }
+    });
+
+    socket.on('alerts:unsubscribe', (userId, callback) => {
+      const normalizedUserId = normalizeUserId(userId);
+      if (!normalizedUserId) {
+        if (typeof callback === 'function') {
+          callback({ ok: false, message: 'valid userId is required' });
+        }
+        return;
+      }
+
+      const room = `alerts:user:${normalizedUserId}`;
+      const existingSubscriptions = socketAlertSubscriptions.get(socket.id) || new Set();
+      const wasSubscribed = existingSubscriptions.has(normalizedUserId);
+
+      if (wasSubscribed) {
+        existingSubscriptions.delete(normalizedUserId);
+        socketAlertSubscriptions.set(socket.id, existingSubscriptions);
+      }
+
+      socket.leave(room);
+      state.roomsLeft += 1;
+
+      if (typeof callback === 'function') {
+        callback({
+          ok: true,
+          room,
+          userId: normalizedUserId,
+          wasSubscribed,
+        });
+      }
+    });
+
     socket.on('disconnect', () => {
-      const existingSubscriptions = socketStockSubscriptions.get(socket.id) || new Set();
-      existingSubscriptions.forEach((symbol) => {
+      const existingStockSubscriptions = socketStockSubscriptions.get(socket.id) || new Set();
+      existingStockSubscriptions.forEach((symbol) => {
         removeSymbolSubscription(symbol);
       });
+
       socketStockSubscriptions.delete(socket.id);
+      socketPortfolioSubscriptions.delete(socket.id);
+      socketAlertSubscriptions.delete(socket.id);
 
       state.activeConnections = Math.max(0, state.activeConnections - 1);
       state.totalDisconnections += 1;
@@ -311,6 +498,8 @@ const stopWebSocketServer = async () => {
   }
 
   socketStockSubscriptions.clear();
+  socketPortfolioSubscriptions.clear();
+  socketAlertSubscriptions.clear();
 
   if (redisPubClient) {
     await redisPubClient.quit();

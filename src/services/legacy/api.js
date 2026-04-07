@@ -942,6 +942,7 @@ const apiExports = {
   
   // Stock-specific data - Updated to match documented endpoints
   getHistoricalPrices,
+  getFinancialRatios,
   getCorporateActions,
   getCompanyAnnouncements,
   getFinancialStatements,

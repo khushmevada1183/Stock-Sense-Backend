@@ -2,13 +2,20 @@ const asyncHandler = require('../../shared/middleware/asyncHandler');
 const {
   syncMarketSnapshot,
   getLatestSnapshot,
+  getMarketOverview,
+  getMarketIndexHistory,
+  getMarketSectorHeatmap,
+  get52WeekLeaderboard,
   getSnapshotHistory,
 } = require('./market.service');
 const { getMarketSyncSchedulerStatus } = require('../../jobs/marketSyncScheduler');
-const { getWebSocketServerStatus } = require('../../realtime/socketServer');
 const {
-  runLiveTickStreamNow,
+  getWebSocketServerStatus,
+  emitMarketSnapshotEvent,
+} = require('../../realtime/socketServer');
+const {
   getLiveTickStreamStatus,
+  runLiveTickStreamNow,
 } = require('../../realtime/liveTickStreamer');
 
 const parseBoolean = (value, fallback) => {
@@ -39,21 +46,63 @@ const parseSymbols = (value) => {
 
 const syncSnapshot = asyncHandler(async (req, res) => {
   const snapshot = await syncMarketSnapshot();
+  emitMarketSnapshotEvent(snapshot);
 
-  res.status(200).json({
-    success: true,
-    data: snapshot,
-  });
+  return res.success(snapshot);
 });
 
 const getLatest = asyncHandler(async (req, res) => {
   const snapshot = await getLatestSnapshot();
   res.setHeader('Cache-Control', 'public, max-age=30');
 
-  res.status(200).json({
-    success: true,
-    data: snapshot,
-  });
+  return res.success(snapshot);
+});
+
+const getOverview = asyncHandler(async (req, res) => {
+  const overview = await getMarketOverview();
+  res.setHeader('Cache-Control', 'public, max-age=30');
+
+  return res.success(overview);
+});
+
+const getIndexHistory = asyncHandler(async (req, res) => {
+  const history = await getMarketIndexHistory(req.params.name, req.query);
+  res.setHeader('Cache-Control', 'public, max-age=30');
+
+  return res.success(
+    {
+      index: history.index,
+      period: history.period,
+      filter: history.filter,
+      source: history.source,
+      count: history.candles.length,
+      candles: history.candles,
+    },
+    {
+      pagination: history.pagination,
+    }
+  );
+});
+
+const getSectorHeatmap = asyncHandler(async (req, res) => {
+  const heatmap = await getMarketSectorHeatmap(req.query);
+  res.setHeader('Cache-Control', 'public, max-age=60');
+
+  return res.success(heatmap);
+});
+
+const get52WeekHigh = asyncHandler(async (req, res) => {
+  const data = await get52WeekLeaderboard('high', req.query);
+  res.setHeader('Cache-Control', 'public, max-age=60');
+
+  return res.success(data);
+});
+
+const get52WeekLow = asyncHandler(async (req, res) => {
+  const data = await get52WeekLeaderboard('low', req.query);
+  res.setHeader('Cache-Control', 'public, max-age=60');
+
+  return res.success(data);
 });
 
 const getStatus = asyncHandler(async (req, res) => {
@@ -72,63 +121,52 @@ const getStatus = asyncHandler(async (req, res) => {
   const ageMs = latestCapturedAt ? Math.max(0, Date.now() - latestCapturedAt) : null;
   const isStale = ageMs === null ? true : ageMs > staleAfterMs;
 
-  res.status(200).json({
-    success: true,
-    data: {
-      scheduler,
-      latestSnapshot: latestSnapshot
-        ? {
-            capturedMinute: latestSnapshot.capturedMinute,
-            capturedAt: latestSnapshot.capturedAt,
-            source: latestSnapshot.source,
-            syncStatus: latestSnapshot.metadata?.syncStatus || null,
-            errorCount: Array.isArray(latestSnapshot.metadata?.errors)
-              ? latestSnapshot.metadata.errors.length
-              : 0,
-          }
-        : null,
-      freshness: {
-        ageMs,
-        staleAfterMs,
-        isStale,
-      },
+  return res.success({
+    scheduler,
+    latestSnapshot: latestSnapshot
+      ? {
+          capturedMinute: latestSnapshot.capturedMinute,
+          capturedAt: latestSnapshot.capturedAt,
+          source: latestSnapshot.source,
+          syncStatus: latestSnapshot.metadata?.syncStatus || null,
+          errorCount: Array.isArray(latestSnapshot.metadata?.errors)
+            ? latestSnapshot.metadata.errors.length
+            : 0,
+        }
+      : null,
+    freshness: {
+      ageMs,
+      staleAfterMs,
+      isStale,
     },
   });
 });
 
 const getHistory = asyncHandler(async (req, res) => {
-  const snapshots = await getSnapshotHistory(req.query);
+  const history = await getSnapshotHistory(req.query);
   res.setHeader('Cache-Control', 'public, max-age=30');
 
-  res.status(200).json({
-    success: true,
-    data: {
-      count: snapshots.length,
-      snapshots,
+  return res.success(
+    {
+      count: history.snapshots.length,
+      snapshots: history.snapshots,
     },
-  });
+    {
+      pagination: history.pagination,
+    }
+  );
 });
 
 const getSocketStatus = asyncHandler(async (req, res) => {
   const status = getWebSocketServerStatus();
-  const liveTickStream = getLiveTickStreamStatus();
 
-  res.status(200).json({
-    success: true,
-    data: {
-      websocket: status,
-      liveTickStream,
-    },
-  });
+  return res.success(status);
 });
 
 const getLiveTickStatus = asyncHandler(async (req, res) => {
   const status = getLiveTickStreamStatus();
 
-  res.status(200).json({
-    success: true,
-    data: status,
-  });
+  return res.success(status);
 });
 
 const syncLiveTicks = asyncHandler(async (req, res) => {
@@ -138,17 +176,31 @@ const syncLiveTicks = asyncHandler(async (req, res) => {
     includeDefaultSymbols: parseBoolean(req.query.includeDefaultSymbols, undefined),
   });
 
-  const statusCode = result.success || result.skipped ? 200 : 500;
+  if (result.success || result.skipped) {
+    return res.success(result);
+  }
 
-  res.status(statusCode).json({
-    success: Boolean(result.success || result.skipped),
-    data: result,
+  return res.status(500).json({
+    success: false,
+    error: {
+      message: 'Live tick sync failed',
+      code: 'ERR_LIVE_TICK_SYNC_FAILED',
+      statusCode: 500,
+      details: result,
+      requestId: req.requestId || req.context?.requestId || null,
+      timestamp: new Date().toISOString(),
+    },
   });
 });
 
 module.exports = {
   syncSnapshot,
   getLatest,
+  getOverview,
+  getIndexHistory,
+  getSectorHeatmap,
+  get52WeekHigh,
+  get52WeekLow,
   getStatus,
   getHistory,
   getSocketStatus,

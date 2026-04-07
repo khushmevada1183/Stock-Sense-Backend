@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 
-const { seedIpoCalendar } = require('../src/modules/ipo/ipo.service');
-const { closePool } = require('../src/db/client');
+const { seedIpoCalendar } = require('../../src/modules/ipo/ipo.service');
+const { closePool } = require('../../src/db/client');
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:10000';
 

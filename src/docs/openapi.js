@@ -525,6 +525,44 @@ const openApiSpec = {
         },
       },
     },
+    '/api/v1/portfolios/performance': {
+      get: {
+        tags: ['Portfolio'],
+        summary: 'Get portfolio performance chart series (aggregate or one portfolio)',
+        security: bearerAuth,
+        parameters: [
+          { name: 'portfolioId', in: 'query', schema: { type: 'string' } },
+          { name: 'from', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'to', in: 'query', schema: { type: 'string', format: 'date' } },
+          {
+            name: 'maxPoints',
+            in: 'query',
+            schema: { type: 'integer', minimum: 10, maximum: 1000, default: 180 },
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+          401: errorResponse,
+        },
+      },
+    },
+    '/api/v1/portfolios/xirr': {
+      get: {
+        tags: ['Portfolio'],
+        summary: 'Get annualized XIRR for aggregate or one portfolio',
+        security: bearerAuth,
+        parameters: [
+          { name: 'portfolioId', in: 'query', schema: { type: 'string' } },
+          { name: 'asOf', in: 'query', schema: { type: 'string', format: 'date' } },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+          401: errorResponse,
+        },
+      },
+    },
     '/api/v1/portfolios/{portfolioId}': {
       get: {
         tags: ['Portfolio'],
@@ -661,6 +699,54 @@ const openApiSpec = {
             required: true,
             schema: { type: 'string' },
           },
+        ],
+        responses: {
+          200: successResponse,
+          401: errorResponse,
+          404: errorResponse,
+        },
+      },
+    },
+    '/api/v1/portfolios/{portfolioId}/performance': {
+      get: {
+        tags: ['Portfolio'],
+        summary: 'Get performance chart series for one portfolio',
+        security: bearerAuth,
+        parameters: [
+          {
+            name: 'portfolioId',
+            in: 'path',
+            required: true,
+            schema: { type: 'string' },
+          },
+          { name: 'from', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'to', in: 'query', schema: { type: 'string', format: 'date' } },
+          {
+            name: 'maxPoints',
+            in: 'query',
+            schema: { type: 'integer', minimum: 10, maximum: 1000, default: 180 },
+          },
+        ],
+        responses: {
+          200: successResponse,
+          401: errorResponse,
+          404: errorResponse,
+        },
+      },
+    },
+    '/api/v1/portfolios/{portfolioId}/xirr': {
+      get: {
+        tags: ['Portfolio'],
+        summary: 'Get annualized XIRR for one portfolio',
+        security: bearerAuth,
+        parameters: [
+          {
+            name: 'portfolioId',
+            in: 'path',
+            required: true,
+            schema: { type: 'string' },
+          },
+          { name: 'asOf', in: 'query', schema: { type: 'string', format: 'date' } },
         ],
         responses: {
           200: successResponse,
@@ -2350,6 +2436,315 @@ const openApiSpec = {
       },
     },
 
+    '/api/v1/stocks/search': {
+      get: {
+        tags: ['Stocks'],
+        summary: 'Search stocks by symbol or company name',
+        parameters: [
+          {
+            name: 'q',
+            in: 'query',
+            required: true,
+            schema: { type: 'string' },
+            description: 'Search keyword for symbol/name',
+          },
+          {
+            name: 'page',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, default: 1 },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+
+    '/api/v1/stocks/technical/status': {
+      get: {
+        tags: ['Stocks'],
+        summary: 'Get technical-indicator scheduler runtime status',
+        responses: {
+          200: successResponse,
+        },
+      },
+    },
+
+    '/api/v1/stocks/technical/recompute': {
+      post: {
+        tags: ['Stocks'],
+        summary: 'Trigger manual technical-indicator recomputation batch',
+        parameters: [
+          {
+            name: 'symbols',
+            in: 'query',
+            schema: { type: 'string' },
+            description: 'Optional comma-separated symbol override list',
+          },
+          {
+            name: 'buckets',
+            in: 'query',
+            schema: { type: 'string' },
+            description: 'Optional comma-separated bucket list from 1m,5m,15m,1d',
+          },
+          {
+            name: 'maxSymbols',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, default: 50 },
+          },
+          {
+            name: 'lookbackLimit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 2000, default: 320 },
+          },
+          {
+            name: 'ignoreMarketHours',
+            in: 'query',
+            schema: { type: 'boolean' },
+            description: 'If true, run even outside configured market window',
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+
+    '/api/v1/stocks/{symbol}/technical': {
+      get: {
+        tags: ['Stocks'],
+        summary: 'Get precomputed technical indicators for a symbol',
+        parameters: [
+          { name: 'symbol', in: 'path', required: true, schema: { type: 'string' } },
+          {
+            name: 'bucket',
+            in: 'query',
+            schema: { type: 'string', enum: ['1m', '5m', '15m', '1d'], default: '1d' },
+            description: 'Indicator timeframe bucket',
+          },
+          { name: 'from', in: 'query', schema: { type: 'string', format: 'date-time' } },
+          { name: 'to', in: 'query', schema: { type: 'string', format: 'date-time' } },
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 2000, default: 240 },
+          },
+          {
+            name: 'includeHistory',
+            in: 'query',
+            schema: { type: 'boolean', default: true },
+          },
+          {
+            name: 'forceRefresh',
+            in: 'query',
+            schema: { type: 'boolean', default: false },
+            description: 'If true, recomputes indicators from candles before reading',
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+
+    '/api/v1/stocks/fundamentals/status': {
+      get: {
+        tags: ['Stocks'],
+        summary: 'Get fundamentals sync scheduler runtime status',
+        responses: {
+          200: successResponse,
+        },
+      },
+    },
+
+    '/api/v1/stocks/fundamentals/sync': {
+      post: {
+        tags: ['Stocks'],
+        summary: 'Trigger manual fundamentals and financial statements sync',
+        requestBody: {
+          required: false,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  symbols: {
+                    oneOf: [
+                      { type: 'string', description: 'Comma-separated symbol list' },
+                      {
+                        type: 'array',
+                        items: { type: 'string' },
+                      },
+                    ],
+                  },
+                  statementTypes: {
+                    oneOf: [
+                      {
+                        type: 'string',
+                        description: 'Comma-separated list from cashflow,yoy_results,quarter_results,balancesheet',
+                      },
+                      {
+                        type: 'array',
+                        items: {
+                          type: 'string',
+                          enum: ['cashflow', 'yoy_results', 'quarter_results', 'balancesheet'],
+                        },
+                      },
+                    ],
+                  },
+                  includeFundamentals: { type: 'boolean', default: true },
+                  maxSymbols: { type: 'integer', minimum: 1, maximum: 200, default: 40 },
+                  mode: {
+                    type: 'string',
+                    enum: ['scheduler', 'direct'],
+                    description: 'Use scheduler mode to apply in-flight protection and scheduler defaults',
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+
+    '/api/v1/stocks/{symbol}/fundamental': {
+      get: {
+        tags: ['Stocks'],
+        summary: 'Get computed valuation and profitability ratios for a symbol',
+        parameters: [
+          { name: 'symbol', in: 'path', required: true, schema: { type: 'string' } },
+          {
+            name: 'includeHistory',
+            in: 'query',
+            schema: { type: 'boolean', default: false },
+          },
+          {
+            name: 'forceRefresh',
+            in: 'query',
+            schema: { type: 'boolean', default: false },
+            description: 'If true, fetches fresh upstream data before reading',
+          },
+          { name: 'from', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'to', in: 'query', schema: { type: 'string', format: 'date' } },
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 50, default: 5 },
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+
+    '/api/v1/stocks/{symbol}/financials': {
+      get: {
+        tags: ['Stocks'],
+        summary: 'Get stored financial statements for a symbol',
+        parameters: [
+          { name: 'symbol', in: 'path', required: true, schema: { type: 'string' } },
+          {
+            name: 'statementType',
+            in: 'query',
+            schema: {
+              type: 'string',
+              enum: ['cashflow', 'yoy_results', 'quarter_results', 'balancesheet'],
+              default: 'quarter_results',
+            },
+          },
+          {
+            name: 'includeHistory',
+            in: 'query',
+            schema: { type: 'boolean', default: false },
+          },
+          {
+            name: 'forceRefresh',
+            in: 'query',
+            schema: { type: 'boolean', default: false },
+            description: 'If true, fetches fresh upstream data before reading',
+          },
+          { name: 'from', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'to', in: 'query', schema: { type: 'string', format: 'date' } },
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 50, default: 5 },
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+
+    '/api/v1/stocks/{symbol}/peers': {
+      get: {
+        tags: ['Stocks'],
+        summary: 'Get peer companies in the same sector sorted by market cap',
+        parameters: [
+          { name: 'symbol', in: 'path', required: true, schema: { type: 'string' } },
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 100, default: 12 },
+          },
+          {
+            name: 'forceRefresh',
+            in: 'query',
+            schema: { type: 'boolean', default: false },
+            description: 'If true, refreshes sector taxonomy from upstream before peer lookup',
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+
+    '/api/v1/stocks/{symbol}': {
+      get: {
+        tags: ['Stocks'],
+        summary: 'Get stock profile/details by symbol',
+        parameters: [
+          { name: 'symbol', in: 'path', required: true, schema: { type: 'string' } },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+
+    '/api/v1/stocks/{symbol}/quote': {
+      get: {
+        tags: ['Stocks'],
+        summary: 'Get latest stock quote by symbol',
+        parameters: [
+          { name: 'symbol', in: 'path', required: true, schema: { type: 'string' } },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+
     '/api/v1/stocks/{symbol}/history': {
       get: {
         tags: ['Stocks'],
@@ -2379,6 +2774,129 @@ const openApiSpec = {
         summary: 'Trigger immediate market snapshot sync',
         responses: {
           200: successResponse,
+        },
+      },
+    },
+    '/api/v1/market/overview': {
+      get: {
+        tags: ['Market'],
+        summary: 'Get market overview with indices, breadth, gainers/losers, and most active lists',
+        responses: {
+          200: successResponse,
+        },
+      },
+    },
+    '/api/v1/market/indices/{name}': {
+      get: {
+        tags: ['Market'],
+        summary: 'Get OHLCV history for a market index',
+        parameters: [
+          {
+            name: 'name',
+            in: 'path',
+            required: true,
+            schema: { type: 'string' },
+          },
+          {
+            name: 'period',
+            in: 'query',
+            schema: { type: 'string', enum: ['1m', '6m', '1yr', '3yr', '5yr', '10yr', 'max'], default: '1m' },
+          },
+          {
+            name: 'filter',
+            in: 'query',
+            schema: { type: 'string', enum: ['default', 'price', 'pe', 'sm', 'evebitda', 'ptb', 'mcs'], default: 'default' },
+          },
+          {
+            name: 'page',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, default: 1 },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 1000, default: 120 },
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+    '/api/v1/market/sector-heatmap': {
+      get: {
+        tags: ['Market'],
+        summary: 'Get aggregated sector heatmap from sector taxonomy and market shockers',
+        parameters: [
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 200, default: 25 },
+          },
+          {
+            name: 'forceRefresh',
+            in: 'query',
+            schema: { type: 'boolean', default: false },
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+    '/api/v1/market/52-week-high': {
+      get: {
+        tags: ['Market'],
+        summary: 'Get stocks nearest to 52-week highs from tracked dataset',
+        parameters: [
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 200, default: 25 },
+          },
+          {
+            name: 'sector',
+            in: 'query',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'forceRefresh',
+            in: 'query',
+            schema: { type: 'boolean', default: false },
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+    '/api/v1/market/52-week-low': {
+      get: {
+        tags: ['Market'],
+        summary: 'Get stocks nearest to 52-week lows from tracked dataset',
+        parameters: [
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 200, default: 25 },
+          },
+          {
+            name: 'sector',
+            in: 'query',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'forceRefresh',
+            in: 'query',
+            schema: { type: 'boolean', default: false },
+          },
+        ],
+        responses: {
+          200: successResponse,
+          400: errorResponse,
         },
       },
     },
@@ -2455,6 +2973,7 @@ const openApiSpec = {
         parameters: [
           { name: 'from', in: 'query', schema: { type: 'string', format: 'date-time' } },
           { name: 'to', in: 'query', schema: { type: 'string', format: 'date-time' } },
+          { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
           { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 1440 } },
         ],
         responses: {
@@ -2481,6 +3000,20 @@ const openApiSpec = {
           data: {
             type: 'object',
             nullable: true,
+            additionalProperties: true,
+          },
+          meta: {
+            type: 'object',
+            nullable: true,
+            properties: {
+              requestId: { type: 'string', nullable: true },
+              timestamp: { type: 'string', format: 'date-time' },
+              pagination: {
+                type: 'object',
+                nullable: true,
+                additionalProperties: true,
+              },
+            },
             additionalProperties: true,
           },
         },

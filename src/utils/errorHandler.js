@@ -4,6 +4,8 @@
  * This utility provides standardized error handling for API requests.
  */
 
+const { logger } = require('./logger');
+
 /**
  * Custom API Error class
  */
@@ -23,7 +25,9 @@ class ApiError extends Error {
  * @param {Error} error - The error object
  * @returns {Object} Standardized error response
  */
-const formatErrorResponse = (error) => {
+const formatErrorResponse = (error, context = {}) => {
+  const requestId = context.requestId || null;
+
   // If it's already an ApiError, use its properties
   if (error instanceof ApiError) {
     return {
@@ -33,7 +37,8 @@ const formatErrorResponse = (error) => {
         code: error.errorCode,
         statusCode: error.statusCode,
         details: error.details,
-        timestamp: error.timestamp
+        timestamp: error.timestamp,
+        requestId,
       }
     };
   }
@@ -51,7 +56,8 @@ const formatErrorResponse = (error) => {
         statusCode,
         // SECURITY: Never expose error details or stack traces in production
         details: process.env.NODE_ENV === 'development' ? error.response?.data : null,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        requestId,
       }
     };
   }
@@ -66,7 +72,8 @@ const formatErrorResponse = (error) => {
       code: 'ERR_UNKNOWN',
       statusCode: 500,
       details: isDevelopment ? { stack: error.stack, source: error.source } : null,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      requestId,
     }
   };
 };
@@ -75,9 +82,19 @@ const formatErrorResponse = (error) => {
  * Express middleware for handling errors
  */
 const errorMiddleware = (err, req, res, next) => {
-  console.error('API Error:', err);
-  
-  const errorResponse = formatErrorResponse(err);
+  const requestId = req?.requestId || req?.context?.requestId || null;
+  const errorResponse = formatErrorResponse(err, { requestId });
+
+  logger.error('API Error', {
+    requestId,
+    method: req?.method,
+    path: req?.originalUrl,
+    statusCode: errorResponse.error.statusCode,
+    code: errorResponse.error.code,
+    message: err?.message,
+    stack: err?.stack,
+  });
+
   res.status(errorResponse.error.statusCode).json(errorResponse);
 };
 

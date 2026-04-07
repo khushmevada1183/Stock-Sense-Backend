@@ -5,6 +5,16 @@ const normalizeNumeric = (value) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const normalizeSymbolList = (symbols = []) => {
+  return Array.from(
+    new Set(
+      (Array.isArray(symbols) ? symbols : [])
+        .map((symbol) => String(symbol || '').trim().toUpperCase())
+        .filter(Boolean)
+    )
+  );
+};
+
 const listPortfoliosByUser = async (userId) => {
   const sql = `
     SELECT
@@ -308,7 +318,51 @@ const addPortfolioTransaction = async ({ portfolioId, transaction }) => {
   return result.rows[0];
 };
 
-const listPortfolioTransactions = async ({ userId, portfolioId }) => {
+const listActivePortfolioSubscriptionsBySymbol = async (symbol) => {
+  const normalizedSymbol = String(symbol || '').trim().toUpperCase();
+  if (!normalizedSymbol) {
+    return [];
+  }
+
+  const result = await query(
+    `
+      SELECT
+        p.id::text AS "portfolioId",
+        p.user_id AS "userId",
+        p.portfolio_name AS "portfolioName",
+        SUM(
+          CASE
+            WHEN LOWER(pt.transaction_type) = 'buy' THEN pt.quantity::DOUBLE PRECISION
+            WHEN LOWER(pt.transaction_type) = 'sell' THEN -pt.quantity::DOUBLE PRECISION
+            ELSE 0
+          END
+        ) AS net_quantity
+      FROM portfolios p
+      JOIN portfolio_transactions pt ON pt.portfolio_id = p.id
+      WHERE UPPER(pt.symbol) = $1
+      GROUP BY p.id, p.user_id, p.portfolio_name
+      HAVING SUM(
+        CASE
+          WHEN LOWER(pt.transaction_type) = 'buy' THEN pt.quantity::DOUBLE PRECISION
+          WHEN LOWER(pt.transaction_type) = 'sell' THEN -pt.quantity::DOUBLE PRECISION
+          ELSE 0
+        END
+      ) > 0;
+    `,
+    [normalizedSymbol]
+  );
+
+  return result.rows.map((row) => ({
+    portfolioId: row.portfolioId,
+    userId: row.userId,
+    portfolioName: row.portfolioName,
+    netQuantity: normalizeNumeric(row.net_quantity),
+  }));
+};
+
+const listPortfolioTransactions = async ({ userId, portfolioId = null, sort = 'desc' }) => {
+  const sortDirection = String(sort || '').trim().toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+
   const result = await query(
     `
       SELECT
@@ -325,10 +379,74 @@ const listPortfolioTransactions = async ({ userId, portfolioId }) => {
       FROM portfolio_transactions pt
       JOIN portfolios p ON p.id = pt.portfolio_id
       WHERE p.user_id = $1
-        AND p.id = $2
-      ORDER BY pt.transaction_date DESC, pt.created_at DESC;
+        AND ($2::uuid IS NULL OR p.id = $2::uuid)
+      ORDER BY pt.transaction_date ${sortDirection}, pt.created_at ${sortDirection};
     `,
     [userId, portfolioId]
+  );
+
+  return result.rows;
+};
+
+const getLatestPricesBySymbols = async (symbols = []) => {
+  const normalizedSymbols = normalizeSymbolList(symbols);
+  if (normalizedSymbols.length === 0) {
+    return [];
+  }
+
+  const result = await query(
+    `
+      WITH latest AS (
+        SELECT DISTINCT ON (t.symbol)
+          t.symbol,
+          t.close::DOUBLE PRECISION AS last_price,
+          t.ts
+        FROM stock_price_ticks t
+        WHERE t.symbol = ANY($1::text[])
+        ORDER BY t.symbol, t.ts DESC
+      ), previous AS (
+        SELECT DISTINCT ON (t.symbol)
+          t.symbol,
+          t.close::DOUBLE PRECISION AS prev_close
+        FROM stock_price_ticks t
+        JOIN latest l ON l.symbol = t.symbol
+        WHERE t.ts < l.ts
+        ORDER BY t.symbol, t.ts DESC
+      )
+      SELECT
+        l.symbol,
+        l.last_price AS "lastPrice",
+        COALESCE(p.prev_close, l.last_price) AS "prevClose",
+        l.ts AS "asOf"
+      FROM latest l
+      LEFT JOIN previous p ON p.symbol = l.symbol;
+    `,
+    [normalizedSymbols]
+  );
+
+  return result.rows;
+};
+
+const getDailyCloseSeriesBySymbols = async ({ symbols = [], from, to }) => {
+  const normalizedSymbols = normalizeSymbolList(symbols);
+  if (normalizedSymbols.length === 0) {
+    return [];
+  }
+
+  const result = await query(
+    `
+      SELECT DISTINCT ON (t.symbol, DATE(t.ts))
+        t.symbol,
+        DATE(t.ts) AS "tradeDate",
+        t.close::DOUBLE PRECISION AS close,
+        t.ts AS "asOf"
+      FROM stock_price_ticks t
+      WHERE t.symbol = ANY($1::text[])
+        AND DATE(t.ts) >= $2::date
+        AND DATE(t.ts) <= $3::date
+      ORDER BY t.symbol, DATE(t.ts), t.ts DESC;
+    `,
+    [normalizedSymbols, from, to]
   );
 
   return result.rows;
@@ -433,6 +551,9 @@ module.exports = {
   updatePortfolio,
   deletePortfolio,
   addPortfolioTransaction,
+  listActivePortfolioSubscriptionsBySymbol,
   listPortfolioTransactions,
   listHoldings,
+  getLatestPricesBySymbols,
+  getDailyCloseSeriesBySymbols,
 };

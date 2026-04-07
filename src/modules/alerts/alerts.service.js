@@ -203,6 +203,12 @@ const evaluateActiveAlerts = async (options = {}) => {
       missingMarketDataCount: 0,
       triggeredCount: 0,
       triggeredAlerts: [],
+      websocketDispatch: {
+        attempted: false,
+        success: false,
+        emittedCount: 0,
+        error: null,
+      },
       notificationQueue: {
         evaluatedAt: evaluatedAtIso,
         triggeredCount: 0,
@@ -263,11 +269,40 @@ const evaluateActiveAlerts = async (options = {}) => {
     skippedNoPushDeviceCount: 0,
   };
 
+  let websocketDispatch = {
+    attempted: false,
+    success: false,
+    emittedCount: 0,
+    error: null,
+  };
+
   if (triggeredAlerts.length > 0) {
     await markAlertsTriggered(
       triggeredAlerts.map((alert) => alert.id),
       evaluatedAtIso
     );
+
+    if (typeof options.onTriggeredAlerts === 'function') {
+      websocketDispatch.attempted = true;
+
+      try {
+        const dispatchResult = await options.onTriggeredAlerts(triggeredAlerts, {
+          evaluatedAt: evaluatedAtIso,
+          cooldownSeconds,
+        });
+
+        websocketDispatch.success = !dispatchResult?.skipped;
+        websocketDispatch.emittedCount = Number.isFinite(dispatchResult?.emittedCount)
+          ? dispatchResult.emittedCount
+          : 0;
+        websocketDispatch.error = dispatchResult?.skipped
+          ? dispatchResult.reason || 'websocket_dispatch_skipped'
+          : null;
+      } catch (error) {
+        websocketDispatch.success = false;
+        websocketDispatch.error = error.message;
+      }
+    }
 
     notificationQueue = await queueAlertNotifications(triggeredAlerts, {
       evaluatedAt: evaluatedAtIso,
@@ -285,6 +320,7 @@ const evaluateActiveAlerts = async (options = {}) => {
     missingMarketDataCount,
     triggeredCount: triggeredAlerts.length,
     triggeredAlerts,
+    websocketDispatch,
     notificationQueue,
   };
 };

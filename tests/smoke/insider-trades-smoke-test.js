@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 
-const { scrapeAndStoreEarningsCalendar } = require('../src/modules/institutional/institutional.service');
-const { closePool } = require('../src/db/client');
+const { scrapeAndStoreInsiderTrades } = require('../../src/modules/institutional/institutional.service');
+const { closePool } = require('../../src/db/client');
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:10000';
 
@@ -25,42 +25,42 @@ const assertStatus = (label, actual, expected) => {
 };
 
 const run = async () => {
-  const syncResult = await scrapeAndStoreEarningsCalendar({
-    source: 'smoke_seed_earnings_calendar',
-    quarters: 10,
-    limit: 260,
+  const syncResult = await scrapeAndStoreInsiderTrades({
+    source: 'smoke_scraper_insider_trades',
+    days: 14,
+    limit: 220,
   });
 
   if (syncResult.savedCount < 1) {
-    throw new Error('expected seeder to save at least one earnings calendar row');
+    throw new Error('expected scraper to save at least one insider trade row');
   }
 
-  const latestResponse = await requestJson('/api/v1/institutional/earnings-calendar?limit=10');
-  assertStatus('earnings calendar latest', latestResponse.response.status, 200);
+  const latestResponse = await requestJson('/api/v1/institutional/insider-trades?limit=10');
+  assertStatus('insider trades latest', latestResponse.response.status, 200);
 
   const latestRows = latestResponse.body?.data?.rows || [];
   if (latestRows.length < 1) {
-    throw new Error('expected latest earnings calendar rows');
+    throw new Error('expected latest insider trades rows');
   }
 
   const historyResponse = await requestJson(
-    '/api/v1/institutional/earnings-calendar/history?symbol=RELIANCE&limit=20'
+    '/api/v1/institutional/insider-trades/history?symbol=RELIANCE&limit=20'
   );
-  assertStatus('earnings calendar history', historyResponse.response.status, 200);
+  assertStatus('insider trades history', historyResponse.response.status, 200);
 
   const historyRows = historyResponse.body?.data?.rows || [];
   if (historyRows.length < 1) {
-    throw new Error('expected earnings calendar history rows');
+    throw new Error('expected insider trades history rows');
   }
 
   const summaryResponse = await requestJson(
-    '/api/v1/institutional/earnings-calendar/summary?range=monthly&limit=6'
+    '/api/v1/institutional/insider-trades/summary?range=monthly&limit=6'
   );
-  assertStatus('earnings calendar summary', summaryResponse.response.status, 200);
+  assertStatus('insider trades summary', summaryResponse.response.status, 200);
 
   const summaryRows = summaryResponse.body?.data?.rows || [];
   if (summaryRows.length < 1) {
-    throw new Error('expected earnings calendar summary rows');
+    throw new Error('expected insider trades summary rows');
   }
 
   const sample = latestRows[0];
@@ -69,17 +69,17 @@ const run = async () => {
     JSON.stringify(
       {
         ok: true,
-        periods: syncResult.periodEnds.length,
+        tradeDates: syncResult.tradeDates.length,
         savedRows: syncResult.savedCount,
         latestCount: latestRows.length,
         historyCount: historyRows.length,
         summaryCount: summaryRows.length,
         sample: {
-          eventDate: sample.eventDate,
+          tradeDate: sample.tradeDate,
           symbol: sample.symbol,
-          fiscalQuarter: sample.fiscalQuarter,
-          epsActual: sample.epsActual,
-          surprisePercent: sample.surprisePercent,
+          insiderName: sample.insiderName,
+          transactionType: sample.transactionType,
+          tradeValueCr: sample.tradeValueCr,
         },
       },
       null,

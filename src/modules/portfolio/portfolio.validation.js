@@ -142,6 +142,52 @@ const normalizeHoldingsQuery = (query) => {
   };
 };
 
+const parseOptionalDate = (value, fieldName) => {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  return normalizeDate(value, fieldName);
+};
+
+const parseOptionalPositiveInt = (value, fieldName, defaultValue, min = 1, max = 2000) => {
+  if (value === undefined || value === null || value === '') {
+    return defaultValue;
+  }
+
+  const parsed = Number.parseInt(String(value), 10);
+  if (!Number.isFinite(parsed) || parsed < min || parsed > max) {
+    throw new ApiError(
+      `${fieldName} must be an integer between ${min} and ${max}`,
+      400,
+      'ERR_INVALID_QUERY'
+    );
+  }
+
+  return parsed;
+};
+
+const normalizePerformanceQuery = (query = {}) => {
+  const from = parseOptionalDate(query.from, 'from');
+  const to = parseOptionalDate(query.to, 'to');
+
+  if (from && to && new Date(from).getTime() > new Date(to).getTime()) {
+    throw new ApiError('from must be earlier than or equal to to', 400, 'ERR_INVALID_QUERY');
+  }
+
+  return {
+    from,
+    to,
+    maxPoints: parseOptionalPositiveInt(query.maxPoints, 'maxPoints', 180, 10, 1000),
+  };
+};
+
+const normalizeXirrQuery = (query = {}) => {
+  return {
+    asOf: parseOptionalDate(query.asOf, 'asOf'),
+  };
+};
+
 module.exports = {
   normalizeUserId,
   normalizePortfolioId,
@@ -149,4 +195,6 @@ module.exports = {
   normalizePortfolioUpdatePayload,
   normalizePortfolioTransactionPayload,
   normalizeHoldingsQuery,
+  normalizePerformanceQuery,
+  normalizeXirrQuery,
 };
