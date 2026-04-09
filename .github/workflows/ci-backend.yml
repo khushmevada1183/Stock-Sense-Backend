@@ -11,6 +11,31 @@ on:
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
+    services:
+      timescaledb:
+        image: timescale/timescaledb:2.15.3-pg15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: stocksense_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d stocksense_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/stocksense_ci
+      NODE_ENV: test
+      CACHE_REDIS_ENABLED: 'false'
+      WEBSOCKET_ENABLED: 'false'
+      LIVE_TICK_STREAM_ENABLED: 'false'
+      MARKET_SYNC_ENABLED: 'false'
+      ALERT_EVALUATOR_ENABLED: 'false'
+      NOTIFICATION_DELIVERY_ENABLED: 'false'
+      TECHNICAL_INDICATOR_SCHEDULER_ENABLED: 'false'
+      FUNDAMENTALS_SYNC_SCHEDULER_ENABLED: 'false'
 
     steps:
       - name: Checkout repository
@@ -35,3 +60,6 @@ jobs:
 
       - name: Run test
         run: npm test
+
+      - name: Run stock-v1 migration and regression gate
+        run: npm run stocks:v1:ci

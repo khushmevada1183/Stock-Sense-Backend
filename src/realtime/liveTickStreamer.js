@@ -241,6 +241,9 @@ const fetchTickForSymbol = async (symbol) => {
     close,
     volume,
     source: 'nse_live_quote_poll',
+    datasetType: 'prod',
+    timeframe: 'tick',
+    sourceFamily: 'live',
     metadata: {
       previousClose: toFiniteNumber(priceInfo.previousClose, null),
       change: toFiniteNumber(priceInfo.change, null),

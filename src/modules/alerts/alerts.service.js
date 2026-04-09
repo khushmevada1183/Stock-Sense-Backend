@@ -9,6 +9,7 @@ const {
   markAlertsTriggered,
 } = require('./alerts.repository');
 const { queueAlertNotifications } = require('../notifications/notifications.service');
+const { getDefaultReadDatasetType } = require('../stocks/datasetPolicy');
 
 const toPositiveInt = (value, fallback) => {
   const parsed = Number.parseInt(value, 10);
@@ -19,6 +20,7 @@ const ALERT_EVALUATOR_COOLDOWN_SECONDS = toPositiveInt(
   process.env.ALERT_EVALUATOR_COOLDOWN_SECONDS,
   300
 );
+const DEFAULT_READ_DATASET_TYPE = getDefaultReadDatasetType();
 
 const toFiniteNumberOrNull = (value) => {
   const parsed = Number(value);
@@ -224,7 +226,9 @@ const evaluateActiveAlerts = async (options = {}) => {
   const symbols = [...new Set(activeAlerts.map((alert) => String(alert.symbol || '').trim().toUpperCase()))]
     .filter(Boolean);
 
-  const snapshots = await getSymbolTickSnapshots(symbols);
+  const snapshots = await getSymbolTickSnapshots(symbols, {
+    datasetType: options.datasetType ?? DEFAULT_READ_DATASET_TYPE,
+  });
   const snapshotBySymbol = new Map(
     snapshots.map((snapshot) => [String(snapshot.symbol || '').trim().toUpperCase(), snapshot])
   );

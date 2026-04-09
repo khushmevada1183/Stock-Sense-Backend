@@ -1,4 +1,5 @@
 const { query } = require('../../../db/client');
+const { getDatasetFilterClause } = require('../datasetPolicy');
 
 const toPositiveInt = (value, fallback) => {
   const parsed = Number.parseInt(value, 10);
@@ -100,6 +101,7 @@ const listRecentSymbolsFromTicks = async (limit = 50) => {
     `
       SELECT symbol
       FROM stock_price_ticks
+      WHERE ${getDatasetFilterClause('dataset_type')}
       GROUP BY symbol
       ORDER BY MAX(ts) DESC
       LIMIT $1;

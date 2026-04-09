@@ -1,4 +1,5 @@
 const { query } = require('../../db/client');
+const { getDatasetFilterClause, isProdOnlyDatasetScope } = require('./datasetPolicy');
 
 const toPositiveInt = (value, fallback) => {
   const parsed = Number.parseInt(value, 10);
@@ -38,6 +39,19 @@ const toIsoDate = (value) => {
   }
 
   return date.toISOString().slice(0, 10);
+};
+
+const toNullableNonNegativeInt = (value) => {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  const parsed = Number.parseInt(String(value), 10);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return null;
+  }
+
+  return parsed;
 };
 
 async function upsertSectorTaxonomyRows(rows = []) {
@@ -414,6 +428,441 @@ async function list52WeekLevels({ type = 'high', sector = null, limit = 25 }) {
   return result.rows;
 }
 
+async function upsertStockMetricsSnapshots(rows = []) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return 0;
+  }
+
+  const sanitizedRows = rows
+    .map((row) => ({
+      symbol: normalizeSymbol(row.symbol),
+      asOfDate: toIsoDate(row.asOfDate) || toIsoDate(new Date()),
+      week52High: row.week52High ?? null,
+      week52Low: row.week52Low ?? null,
+      week52HighDate: toIsoDate(row.week52HighDate),
+      week52LowDate: toIsoDate(row.week52LowDate),
+      high3m: row.high3m ?? null,
+      low3m: row.low3m ?? null,
+      high12m: row.high12m ?? null,
+      low12m: row.low12m ?? null,
+      return3mPercent: row.return3mPercent ?? null,
+      return12mPercent: row.return12mPercent ?? null,
+      avgVolume20d: toNullableNonNegativeInt(row.avgVolume20d),
+      source: row.source || 'computed',
+      metadata: row.metadata || {},
+    }))
+    .filter((row) => Boolean(row.symbol));
+
+  if (sanitizedRows.length === 0) {
+    return 0;
+  }
+
+  let totalUpserted = 0;
+  const batches = chunkArray(sanitizedRows, 200);
+
+  for (const batch of batches) {
+    const values = [];
+
+    const placeholders = batch.map((row, index) => {
+      const offset = index * 15;
+
+      values.push(
+        row.symbol,
+        row.asOfDate,
+        row.week52High,
+        row.week52Low,
+        row.week52HighDate,
+        row.week52LowDate,
+        row.high3m,
+        row.low3m,
+        row.high12m,
+        row.low12m,
+        row.return3mPercent,
+        row.return12mPercent,
+        row.avgVolume20d,
+        row.source,
+        JSON.stringify(row.metadata)
+      );
+
+      return `($${offset + 1}, $${offset + 2}::date, $${offset + 3}, $${offset + 4}, $${offset + 5}::date, $${offset + 6}::date, $${offset + 7}, $${offset + 8}, $${offset + 9}, $${offset + 10}, $${offset + 11}, $${offset + 12}, $${offset + 13}, $${offset + 14}, $${offset + 15}::jsonb)`;
+    });
+
+    const result = await query(
+      `
+        INSERT INTO stock_metrics_snapshots (
+          symbol,
+          as_of_date,
+          week_52_high,
+          week_52_low,
+          week_52_high_date,
+          week_52_low_date,
+          high_3m,
+          low_3m,
+          high_12m,
+          low_12m,
+          return_3m_percent,
+          return_12m_percent,
+          avg_volume_20d,
+          source,
+          metadata
+        )
+        VALUES ${placeholders.join(', ')}
+        ON CONFLICT (symbol, as_of_date)
+        DO UPDATE SET
+          week_52_high = EXCLUDED.week_52_high,
+          week_52_low = EXCLUDED.week_52_low,
+          week_52_high_date = EXCLUDED.week_52_high_date,
+          week_52_low_date = EXCLUDED.week_52_low_date,
+          high_3m = EXCLUDED.high_3m,
+          low_3m = EXCLUDED.low_3m,
+          high_12m = EXCLUDED.high_12m,
+          low_12m = EXCLUDED.low_12m,
+          return_3m_percent = EXCLUDED.return_3m_percent,
+          return_12m_percent = EXCLUDED.return_12m_percent,
+          avg_volume_20d = EXCLUDED.avg_volume_20d,
+          source = EXCLUDED.source,
+          metadata = EXCLUDED.metadata,
+          updated_at = NOW();
+      `,
+      values
+    );
+
+    totalUpserted += result.rowCount;
+  }
+
+  return totalUpserted;
+}
+
+async function getLatestStockMetricsSnapshotBySymbol(symbol) {
+  const normalizedSymbol = normalizeSymbol(symbol);
+  if (!normalizedSymbol) {
+    return null;
+  }
+
+  const result = await query(
+    `
+      SELECT
+        symbol,
+        as_of_date AS "asOfDate",
+        week_52_high AS "week52High",
+        week_52_low AS "week52Low",
+        week_52_high_date AS "week52HighDate",
+        week_52_low_date AS "week52LowDate",
+        high_3m AS "high3m",
+        low_3m AS "low3m",
+        high_12m AS "high12m",
+        low_12m AS "low12m",
+        return_3m_percent AS "return3mPercent",
+        return_12m_percent AS "return12mPercent",
+        avg_volume_20d AS "avgVolume20d",
+        source,
+        metadata,
+        created_at AS "createdAt",
+        updated_at AS "updatedAt"
+      FROM stock_metrics_snapshots
+      WHERE symbol = $1
+      ORDER BY as_of_date DESC
+      LIMIT 1;
+    `,
+    [normalizedSymbol]
+  );
+
+  return result.rows[0] || null;
+}
+
+async function buildStockMetricsSnapshotFromTicks(symbol, asOfDate = null) {
+  const normalizedSymbol = normalizeSymbol(symbol);
+  if (!normalizedSymbol) {
+    return null;
+  }
+
+  const normalizedAsOfDate = toIsoDate(asOfDate) || toIsoDate(new Date());
+
+  const result = await query(
+    `
+      WITH params AS (
+        SELECT
+          $1::text AS symbol,
+          $2::date AS as_of_date
+      ),
+      latest_tick AS (
+        SELECT t.close::DOUBLE PRECISION AS latest_close
+        FROM stock_price_ticks t
+        JOIN params p ON p.symbol = t.symbol
+        WHERE ${getDatasetFilterClause('t.dataset_type')}
+          AND t.ts < (p.as_of_date + INTERVAL '1 day')
+        ORDER BY t.ts DESC
+        LIMIT 1
+      ),
+      close_3m AS (
+        SELECT t.close::DOUBLE PRECISION AS close_3m
+        FROM stock_price_ticks t
+        JOIN params p ON p.symbol = t.symbol
+        WHERE ${getDatasetFilterClause('t.dataset_type')}
+          AND t.ts < (p.as_of_date - INTERVAL '90 days' + INTERVAL '1 day')
+        ORDER BY t.ts DESC
+        LIMIT 1
+      ),
+      close_12m AS (
+        SELECT t.close::DOUBLE PRECISION AS close_12m
+        FROM stock_price_ticks t
+        JOIN params p ON p.symbol = t.symbol
+        WHERE ${getDatasetFilterClause('t.dataset_type')}
+          AND t.ts < (p.as_of_date - INTERVAL '365 days' + INTERVAL '1 day')
+        ORDER BY t.ts DESC
+        LIMIT 1
+      ),
+      window_3m AS (
+        SELECT
+          MAX(COALESCE(t.high, t.close))::DOUBLE PRECISION AS high_3m,
+          MIN(COALESCE(t.low, t.close))::DOUBLE PRECISION AS low_3m
+        FROM stock_price_ticks t
+        JOIN params p ON p.symbol = t.symbol
+        WHERE ${getDatasetFilterClause('t.dataset_type')}
+          AND t.ts >= (p.as_of_date - INTERVAL '90 days')
+          AND t.ts < (p.as_of_date + INTERVAL '1 day')
+      ),
+      window_12m AS (
+        SELECT
+          MAX(COALESCE(t.high, t.close))::DOUBLE PRECISION AS week_52_high,
+          MIN(COALESCE(t.low, t.close))::DOUBLE PRECISION AS week_52_low
+        FROM stock_price_ticks t
+        JOIN params p ON p.symbol = t.symbol
+        WHERE ${getDatasetFilterClause('t.dataset_type')}
+          AND t.ts >= (p.as_of_date - INTERVAL '365 days')
+          AND t.ts < (p.as_of_date + INTERVAL '1 day')
+      ),
+      high_12m_date AS (
+        SELECT t.ts::date AS week_52_high_date
+        FROM stock_price_ticks t
+        JOIN params p ON p.symbol = t.symbol
+        WHERE ${getDatasetFilterClause('t.dataset_type')}
+          AND t.ts >= (p.as_of_date - INTERVAL '365 days')
+          AND t.ts < (p.as_of_date + INTERVAL '1 day')
+        ORDER BY COALESCE(t.high, t.close) DESC NULLS LAST, t.ts DESC
+        LIMIT 1
+      ),
+      low_12m_date AS (
+        SELECT t.ts::date AS week_52_low_date
+        FROM stock_price_ticks t
+        JOIN params p ON p.symbol = t.symbol
+        WHERE ${getDatasetFilterClause('t.dataset_type')}
+          AND t.ts >= (p.as_of_date - INTERVAL '365 days')
+          AND t.ts < (p.as_of_date + INTERVAL '1 day')
+        ORDER BY COALESCE(t.low, t.close) ASC NULLS LAST, t.ts DESC
+        LIMIT 1
+      ),
+      avg_volume_20d AS (
+        SELECT ROUND(AVG(sample.volume))::BIGINT AS avg_volume_20d
+        FROM (
+          SELECT COALESCE(t.volume, 0)::DOUBLE PRECISION AS volume
+          FROM stock_price_ticks t
+          JOIN params p ON p.symbol = t.symbol
+          WHERE ${getDatasetFilterClause('t.dataset_type')}
+            AND t.ts < (p.as_of_date + INTERVAL '1 day')
+          ORDER BY t.ts DESC
+          LIMIT 20
+        ) sample
+      )
+      SELECT
+        p.symbol,
+        p.as_of_date AS "asOfDate",
+        latest.latest_close AS "latestClose",
+        w12.week_52_high AS "week52High",
+        w12.week_52_low AS "week52Low",
+        high_date.week_52_high_date AS "week52HighDate",
+        low_date.week_52_low_date AS "week52LowDate",
+        w3.high_3m AS "high3m",
+        w3.low_3m AS "low3m",
+        w12.week_52_high AS "high12m",
+        w12.week_52_low AS "low12m",
+        CASE
+          WHEN c3.close_3m IS NULL OR c3.close_3m = 0 OR latest.latest_close IS NULL THEN NULL
+          ELSE ((latest.latest_close - c3.close_3m) / c3.close_3m) * 100
+        END AS "return3mPercent",
+        CASE
+          WHEN c12.close_12m IS NULL OR c12.close_12m = 0 OR latest.latest_close IS NULL THEN NULL
+          ELSE ((latest.latest_close - c12.close_12m) / c12.close_12m) * 100
+        END AS "return12mPercent",
+        volume.avg_volume_20d AS "avgVolume20d"
+      FROM params p
+      LEFT JOIN latest_tick latest ON TRUE
+      LEFT JOIN close_3m c3 ON TRUE
+      LEFT JOIN close_12m c12 ON TRUE
+      LEFT JOIN window_3m w3 ON TRUE
+      LEFT JOIN window_12m w12 ON TRUE
+      LEFT JOIN high_12m_date high_date ON TRUE
+      LEFT JOIN low_12m_date low_date ON TRUE
+      LEFT JOIN avg_volume_20d volume ON TRUE;
+    `,
+    [normalizedSymbol, normalizedAsOfDate]
+  );
+
+  const row = result.rows[0] || null;
+  if (!row || row.latestClose === null) {
+    return null;
+  }
+
+  return {
+    symbol: row.symbol,
+    asOfDate: row.asOfDate,
+    week52High: row.week52High,
+    week52Low: row.week52Low,
+    week52HighDate: row.week52HighDate,
+    week52LowDate: row.week52LowDate,
+    high3m: row.high3m,
+    low3m: row.low3m,
+    high12m: row.high12m,
+    low12m: row.low12m,
+    return3mPercent: row.return3mPercent,
+    return12mPercent: row.return12mPercent,
+    avgVolume20d: row.avgVolume20d,
+    source: isProdOnlyDatasetScope() ? 'computed_from_prod_ticks' : 'computed_from_all_ticks',
+    metadata: {
+      pipeline: 'stock-metrics-backfill',
+      computedAt: new Date().toISOString(),
+    },
+  };
+}
+
+async function upsertStockProfileDetailsRows(rows = []) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return 0;
+  }
+
+  const sanitizedRows = rows
+    .map((row) => ({
+      symbol: normalizeSymbol(row.symbol),
+      businessSummary: row.businessSummary ? String(row.businessSummary).trim() : null,
+      companyHistory: row.companyHistory ? String(row.companyHistory).trim() : null,
+      managementPayload: row.managementPayload && typeof row.managementPayload === 'object'
+        ? row.managementPayload
+        : {},
+      website: row.website ? String(row.website).trim() : null,
+      headquarters: row.headquarters ? String(row.headquarters).trim() : null,
+      foundedYear: toNullableNonNegativeInt(row.foundedYear),
+      employees: toNullableNonNegativeInt(row.employees),
+      source: row.source || 'manual',
+      metadata: row.metadata || {},
+    }))
+    .filter((row) => Boolean(row.symbol));
+
+  if (sanitizedRows.length === 0) {
+    return 0;
+  }
+
+  let totalUpserted = 0;
+  const batches = chunkArray(sanitizedRows, 200);
+
+  for (const batch of batches) {
+    const values = [];
+
+    const placeholders = batch.map((row, index) => {
+      const offset = index * 10;
+
+      values.push(
+        row.symbol,
+        row.businessSummary,
+        row.companyHistory,
+        JSON.stringify(row.managementPayload),
+        row.website,
+        row.headquarters,
+        row.foundedYear,
+        row.employees,
+        row.source,
+        JSON.stringify(row.metadata)
+      );
+
+      return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}::jsonb, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8}, $${offset + 9}, $${offset + 10}::jsonb)`;
+    });
+
+    const result = await query(
+      `
+        INSERT INTO stock_profile_details (
+          symbol,
+          business_summary,
+          company_history,
+          management_payload,
+          website,
+          headquarters,
+          founded_year,
+          employees,
+          source,
+          metadata
+        )
+        VALUES ${placeholders.join(', ')}
+        ON CONFLICT (symbol)
+        DO UPDATE SET
+          business_summary = COALESCE(EXCLUDED.business_summary, stock_profile_details.business_summary),
+          company_history = COALESCE(EXCLUDED.company_history, stock_profile_details.company_history),
+          management_payload = EXCLUDED.management_payload,
+          website = COALESCE(EXCLUDED.website, stock_profile_details.website),
+          headquarters = COALESCE(EXCLUDED.headquarters, stock_profile_details.headquarters),
+          founded_year = COALESCE(EXCLUDED.founded_year, stock_profile_details.founded_year),
+          employees = COALESCE(EXCLUDED.employees, stock_profile_details.employees),
+          source = EXCLUDED.source,
+          metadata = EXCLUDED.metadata,
+          updated_at = NOW();
+      `,
+      values
+    );
+
+    totalUpserted += result.rowCount;
+  }
+
+  return totalUpserted;
+}
+
+async function getStockProfileDetailsBySymbol(symbol) {
+  const normalizedSymbol = normalizeSymbol(symbol);
+  if (!normalizedSymbol) {
+    return null;
+  }
+
+  const result = await query(
+    `
+      SELECT
+        sm.symbol,
+        sm.company_name AS "companyName",
+        sm.exchange,
+        sm.isin,
+        sm.nse_symbol AS "nseSymbol",
+        sm.bse_code AS "bseCode",
+        sm.series,
+        sm.sector,
+        sm.industry,
+        sm.logo_url AS "logoUrl",
+        sm.website AS "stocksMasterWebsite",
+        sm.description AS "stocksMasterDescription",
+        sm.headquarters AS "stocksMasterHeadquarters",
+        sm.founded_year AS "stocksMasterFoundedYear",
+        sm.employees AS "stocksMasterEmployees",
+        sm.source AS "stocksMasterSource",
+        sm.metadata AS "stocksMasterMetadata",
+        sp.business_summary AS "businessSummary",
+        sp.company_history AS "companyHistory",
+        sp.management_payload AS "managementPayload",
+        sp.website AS "profileWebsite",
+        sp.headquarters AS "profileHeadquarters",
+        sp.founded_year AS "profileFoundedYear",
+        sp.employees AS "profileEmployees",
+        sp.source AS "profileSource",
+        sp.metadata AS "profileMetadata",
+        sp.created_at AS "profileCreatedAt",
+        sp.updated_at AS "profileUpdatedAt"
+      FROM stocks_master sm
+      LEFT JOIN stock_profile_details sp
+        ON sp.symbol = sm.symbol
+      WHERE sm.symbol = $1
+        AND sm.is_active = TRUE
+      LIMIT 1;
+    `,
+    [normalizedSymbol]
+  );
+
+  return result.rows[0] || null;
+}
+
 async function listRecentSymbolsFromTicks(limit = 40) {
   const normalizedLimit = Math.min(toPositiveInt(limit, 40), 500);
 
@@ -421,6 +870,7 @@ async function listRecentSymbolsFromTicks(limit = 40) {
     `
       SELECT symbol
       FROM stock_price_ticks
+      WHERE ${getDatasetFilterClause('dataset_type')}
       GROUP BY symbol
       ORDER BY MAX(ts) DESC
       LIMIT $1;
@@ -623,5 +1073,10 @@ module.exports = {
   listLatestSectorHeatmap,
   upsert52WeekLevelsRows,
   list52WeekLevels,
+  upsertStockMetricsSnapshots,
+  getLatestStockMetricsSnapshotBySymbol,
+  buildStockMetricsSnapshotFromTicks,
+  upsertStockProfileDetailsRows,
+  getStockProfileDetailsBySymbol,
   listRecentSymbolsFromTicks,
 };

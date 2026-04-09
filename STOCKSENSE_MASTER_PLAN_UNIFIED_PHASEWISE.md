@@ -45,7 +45,7 @@ This document merges both source plans into one operationally usable phase-wise 
 - Delivery control: Each sprint/milestone should map to both a Source A phase and Source B requirement IDs.
 - Completion rule per phase: Mark phase done only after associated requirement acceptance criteria are demonstrably met.
 
-## Live Execution Status (Updated 2026-04-07)
+## Live Execution Status (Updated 2026-04-09)
 
 Legend:
 - [x] Completed
@@ -53,7 +53,7 @@ Legend:
 
 ### Current Phase Completion State
 
-- [ ] Phase 0 complete
+- [x] Phase 0 complete
 - [ ] Phase 1 complete
 - [x] Phase 2 complete
 
@@ -120,6 +120,201 @@ Legend:
 - [x] Phase 4 WebSocket load-test harness (npm run websocket:load:test)
 - [x] Phase 4 horizontal scaling hardening (connection/subscription caps + connection-rate limiting)
 - [ ] Phase 4 Kafka consumer for tick-to-WebSocket pipeline (deferred until Kafka setup)
+
+## High-Priority Override: V1 Stock Data Refactor (No V2 Fork)
+
+This section is a priority override requested on 2026-04-09. It keeps the product on V1 naming/versioning and refactors schema + data in place.
+
+Priority Rule:
+- Treat this section as P0.
+- Execute before any new feature roadmap work in later phases.
+- Pause non-critical roadmap expansion until this section reaches done criteria.
+
+### Current Structure Analysis (As-Is Baseline)
+
+Current stock-domain tables and views already in use:
+- `stock_price_ticks` (raw/historical/live OHLCV time-series; Timescale hypertable)
+- `stock_price_candles_1m`, `stock_price_candles_5m`, `stock_price_candles_15m`, `stock_price_candles_1d` (materialized aggregate views)
+- `stocks_master` (symbol reference + static metadata)
+- `technical_indicators`
+- `company_fundamentals`
+- `company_financial_statements`
+- `stock_sector_taxonomy`
+- `stock_52_week_levels`
+- `news_articles`
+- `social_sentiment_snapshots`
+- `fear_greed_index_snapshots`
+
+Current ingestion and write paths:
+- Historical bootstrap script writes to `stock_price_ticks` with source `nse_historical_daily`.
+- Live tick stream writes to `stock_price_ticks` with source `nse_live_quote_poll`.
+- Smoke tests also write to `stock_price_ticks` (test-only sources mixed with production sources).
+
+Current risks identified from audit:
+- Test/smoke data and production data share the same fact table.
+- Same symbol can have mixed sources with no dataset environment guardrail.
+- API/business queries can accidentally read mixed source rows unless explicitly filtered.
+- Derived windows (3m/12m, 52-week, return snapshots) are partially spread and not centralized in one canonical snapshot model.
+
+### Refactor Objectives (V1-In-Place)
+
+1. Keep one table per domain (not one table per stock).
+2. Separate production and test datasets explicitly at schema + query layers.
+3. Centralize stock summary metrics (52-week, 3m, 12m windows) in a dedicated snapshot table.
+4. Keep news isolated in news tables and tighten symbol linkage for efficient joins.
+5. Preserve API contracts where possible; introduce additive changes first.
+6. Migrate existing data with reversible SQL and clear rollback checkpoints.
+
+Design decision reaffirmed (2026-04-09):
+- Continue with domain-driven tables, not per-stock physical tables.
+- Keep stock summary windows in `stock_metrics_snapshots` (52-week + 12m + 3m values and dates).
+- Keep descriptive company metadata in `stock_profile_details`.
+- Keep articles in `news_articles` with normalized stock linkage in `news_article_symbols`.
+- Reserve AI/forecast data for future dedicated domain tables (do not couple to current stock profile schema).
+
+### Detailed V1 Refactor Plan (P0 Execution Track)
+
+#### P0-A: Freeze, Backup, and Data Profiling
+
+- [x] Freeze schema changes unrelated to stock domain until P0 complete. (P0 scope lock maintained across execution track)
+- [x] Take DB backup/snapshot before migration run. (`npm run db:snapshot -- --label=p0-a-precutover` => `docs/refactor/backups/p0-a-precutover-neondb-20260409T140950Z.sql`)
+- [x] Export profiling snapshots:
+    - row counts per source in `stock_price_ticks`
+    - duplicate/multi-source symbols
+    - null/invalid metric checks
+    - table size/retention estimates
+- [x] Record baseline in release note artifact for comparison after cutover. (`docs/refactor/v1_stock_refactor_baseline.md`)
+
+Deliverables:
+- `docs/refactor/v1_stock_refactor_baseline.md` (created)
+- SQL profiling script under `scripts/sql/` (`scripts/sql/v1_stock_refactor_profiling.sql`)
+- DB snapshot artifact under `docs/refactor/backups/` (`docs/refactor/backups/p0-a-precutover-neondb-20260409T140950Z.sql`)
+
+#### P0-B: Schema Refactor (Additive, Backward-Compatible First)
+
+- [x] Create migration `030_refactor_stock_price_ticks_v1.sql`.
+    - Add `dataset_type TEXT NOT NULL DEFAULT 'prod'`.
+    - Add `timeframe TEXT NOT NULL DEFAULT '1d'` with check (`tick|1m|5m|15m|1d`).
+    - Add `source_family TEXT` (historical/live/smoke/backfill/manual).
+    - Add index `(dataset_type, symbol, ts DESC)`.
+    - Add index `(dataset_type, source, ts DESC)`.
+- [x] Create migration `031_create_stock_metrics_snapshots.sql`.
+    - New table `stock_metrics_snapshots` keyed by `(symbol, as_of_date)`.
+    - Columns: `week_52_high`, `week_52_low`, `week_52_high_date`, `week_52_low_date`, `high_3m`, `low_3m`, `high_12m`, `low_12m`, `return_3m_percent`, `return_12m_percent`, `avg_volume_20d`, `source`, `metadata`, timestamps.
+- [x] Create migration `032_create_stock_profile_details.sql`.
+    - New table `stock_profile_details` keyed by `symbol`.
+    - Columns: `business_summary`, `company_history`, `management_payload`, `website`, `headquarters`, `founded_year`, `employees`, `metadata`, timestamps.
+- [x] Create migration `033_create_news_article_symbols.sql`.
+    - New bridge table `news_article_symbols (article_id, symbol, relevance_score, created_at)`.
+    - Keep `news_articles.symbols` temporarily for backward compatibility.
+
+Deliverables:
+- New migrations `030` to `033`.
+- Migration validation logs (`npm run db:migrate:repair -- --apply=true` / `npm run db:migrate`; Flyway CLI unavailable in this environment).
+- Added migration `034_normalize_tick_timeframe_backfill.sql` to normalize existing test/live timeframe backfill.
+
+#### P0-C: Data Transfer and Backfill Plan
+
+Data transfer matrix for `stock_price_ticks`:
+
+| Existing source | New dataset_type | New timeframe | New source_family | Action |
+|---|---|---|---|---|
+| `nse_historical_daily` | `prod` | `1d` | `historical` | Update in place |
+| `nse_live_quote_poll` | `prod` | `tick` | `live` | Update in place |
+| `timescale-smoke` | `test` | `1m` | `smoke` | Update in place (later optional archive) |
+| `cache-smoke` | `test` | `1m` | `smoke` | Update in place (later optional archive) |
+| `alerts-evaluator-smoke` | `test` | `1m` | `smoke` | Update in place (later optional archive) |
+| `notification-smoke` | `test` | `1m` | `smoke` | Update in place (later optional archive) |
+| other/manual | `prod` default | derive from metadata or fallback `1d` | `manual` | Controlled update |
+
+Backfill tasks:
+- [x] Run source-to-column updates for all existing rows.
+- [x] Backfill `stock_metrics_snapshots` from `stock_price_ticks` for all active symbols (latest as_of_date first, then historical dates as needed). (current run: 327 symbols with prod tick coverage)
+- [x] Backfill `stock_profile_details` from existing `stocks_master` fields where available. (current run: 607 symbols)
+- [x] Backfill `news_article_symbols` from `news_articles.symbols` array for existing records. (validated expected=680, actual=680)
+- [x] Refresh aggregate candle views after backfill. (`npm run news:symbols:backfill`)
+
+Validation queries:
+- [x] No NULL `dataset_type` or `timeframe` in `stock_price_ticks`. (`npm run stocks:v1:validate`)
+- [x] `prod` queries exclude smoke rows by default. (`npm run stocks:v1:validate`)
+- [x] Metrics snapshot coverage ratio >= 95% for symbols with 1y history. (`npm run stocks:v1:validate` => eligible=10, covered=10, coverage=100%)
+- [x] Bridge row count in `news_article_symbols` matches exploded count from `news_articles.symbols`. (`npm run stocks:v1:validate`)
+
+#### P0-D: Code Refactor (File-Level Update Matrix)
+
+Database and migration files:
+- [x] `src/db/migrations/030_refactor_stock_price_ticks_v1.sql`
+- [x] `src/db/migrations/031_create_stock_metrics_snapshots.sql`
+- [x] `src/db/migrations/032_create_stock_profile_details.sql`
+- [x] `src/db/migrations/033_create_news_article_symbols.sql`
+- [x] `src/db/check.js` (readiness checks for new tables/columns)
+
+Ingestion and jobs:
+- [x] `scripts/bootstrap-ticks-history.js` (write `dataset_type`, `timeframe`, `source_family`)
+- [x] `src/realtime/liveTickStreamer.js` (tag live writes as `prod/tick/live`)
+- [x] `src/jobs/syncLiveTicks.js` (pipeline now writes through updated tick repository with new dimensions)
+
+Core stock repositories/services:
+- [x] `src/modules/stocks/ticks/ticks.repository.js` (default filters to `dataset_type='prod'`)
+- [x] `src/modules/stocks/ticks/ticks.service.js` (query options for dataset type)
+- [x] `src/modules/stocks/stocks.repository.js` (52-week and recent symbol queries to prod-only)
+- [x] `src/modules/stocks/fundamentals/fundamentals.repository.js` (prod-only source data reads)
+- [x] `src/modules/stocks/technical/technical.repository.js` (prod-only source data reads)
+- [x] `src/modules/stocks/stocks.service.js` (profile endpoint enriched with `stock_profile_details` + latest `stock_metrics_snapshots`)
+
+Dependent domain repositories:
+- [x] `src/modules/portfolio/portfolio.repository.js` (valuation queries ignore test data)
+- [x] `src/modules/alerts/alerts.repository.js` (trigger checks ignore test data)
+- [x] `src/modules/news/news.repository.js` (add `news_article_symbols` support)
+
+Tests and smoke harness:
+- [x] `tests/smoke/timescale-history-smoke-test.js`
+- [x] `tests/smoke/cache-layer-smoke-test.js`
+- [x] `tests/smoke/alerts-evaluator-smoke-test.js`
+- [x] `tests/smoke/notification-delivery-smoke-test.js`
+- [x] Add assertions for dataset separation and default prod filtering.
+
+#### P0-E: API/Query Behavior Changes (V1 Compatible)
+
+- [x] Keep existing endpoints unchanged by default response contracts. (additive-only behavior; smoke suite passing)
+- [x] Internally default all stock read APIs to `dataset_type='prod'`.
+- [x] Add optional query flag for diagnostics: `dataset=test|prod` (admin/debug only).
+- [x] Ensure docs clearly indicate default production data filtering.
+
+#### P0-F: Cutover and Rollback
+
+Cutover:
+- [x] Deploy additive migrations. (`npm run db:migrate:repair -- --apply=true` then `npm run db:migrate`)
+- [x] Deploy code with prod-only defaults. (validated via local `stocks:v1:ci` server boot + smoke/regression pass)
+- [x] Run backfill scripts. (`ticks:history:bootstrap`, `stocks:v1:backfill`, `news:symbols:backfill`)
+- [x] Run smoke tests + targeted stock API tests. (`timescale:smoke`, `cache:smoke`, `alerts:evaluator:smoke`, `notifications:smoke`)
+- [x] Enable monitoring for row growth, query latency, and mismatch alerts. (`npm run stocks:v1:monitor`)
+
+Rollback:
+- [x] If query regressions occur, switch to previous app build while keeping additive schema. (`docs/refactor/v1_stock_refactor_rollback.md`)
+- [x] Revert prod-only filters behind feature flag if needed. (`STOCKS_V1_DEFAULT_DATASET_SCOPE=all`; verify via `npm run stocks:v1:verify:dataset-scope`)
+- [x] Keep backup snapshot for full DB rollback only if critical corruption is detected. (`docs/refactor/backups/p0-a-precutover-neondb-20260409T140950Z.sql`)
+
+### P0 Completion Criteria (Mandatory Before Resuming Feature Roadmap)
+
+- [x] All stock read paths use `dataset_type='prod'` by default.
+- [x] Smoke/test rows are fully isolated from production API responses.
+- [x] Metrics snapshots table populated and used for 52w/3m/12m summary reads (`GET /api/v1/stocks/:symbol` now returns `metrics` from latest snapshot).
+- [x] News symbol linkage normalized via bridge table with backward compatibility maintained.
+- [x] Migration + smoke + targeted regression tests are green in CI gate. (validated by local `npm run stocks:v1:ci` + `npm test`; workflow includes same `stocks:v1:ci` command)
+Status update (2026-04-09): Backend CI workflow runs `npm run stocks:v1:ci` (migrate + deterministic fixture seeding + stock-v1 validate/monitor + smoke regression); local gate and unit tests are green.
+
+### Priority Scheduling Override
+
+Execution order is now:
+1. P0-A Baseline + backup
+2. P0-B Schema migrations
+3. P0-C Data transfer/backfill
+4. P0-D File-level code refactor
+5. P0-E API behavior hardening
+6. P0-F Cutover validation
+
+Only after this sequence is complete should the roadmap continue with deferred items and later phases.
 
 ## Verbatim Source A Phase Roadmap
 

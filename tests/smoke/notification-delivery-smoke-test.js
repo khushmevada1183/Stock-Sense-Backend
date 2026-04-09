@@ -25,6 +25,8 @@ const assertStatus = (label, actual, expected) => {
   }
 };
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const run = async () => {
   const email = `notify.${Date.now()}@example.com`;
   const password = 'StrongPass123';
@@ -91,6 +93,9 @@ const run = async () => {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       source: 'notification-smoke',
+      datasetType: 'test',
+      timeframe: '1m',
+      sourceFamily: 'smoke',
       ticks: [
         {
           timestamp: new Date(now - 60 * 1000).toISOString(),
@@ -114,26 +119,39 @@ const run = async () => {
 
   assertStatus('ingest ticks', ingest.response.status, 201);
 
-  const evaluation = await evaluateActiveAlerts({ cooldownSeconds: 1 });
+  const evaluation = await evaluateActiveAlerts({
+    cooldownSeconds: 1,
+    datasetType: 'test',
+  });
   if (evaluation.triggeredCount < 1) {
     throw new Error('expected at least one triggered alert after evaluation');
   }
 
-  const processing = await processQueuedNotifications({ limit: 20 });
-  if (processing.sentCount < 2) {
-    throw new Error(`expected at least 2 sent notifications, got ${processing.sentCount}`);
+  const maxAttempts = 5;
+  let sentChannels = new Set();
+  let processing = { sentCount: 0, failedCount: 0 };
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    processing = await processQueuedNotifications({ limit: 200 });
+
+    const notifications = await requestJson('/api/v1/notifications?limit=200', {
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    assertStatus('list notifications', notifications.response.status, 200);
+
+    const items = notifications.body?.data?.notifications || [];
+    const alertNotifications = items.filter((item) => item.alertId === alertId && item.status === 'sent');
+    sentChannels = new Set(alertNotifications.map((item) => item.channel));
+
+    if (sentChannels.has('email') && sentChannels.has('push')) {
+      break;
+    }
+
+    if (attempt < maxAttempts) {
+      await sleep(150);
+    }
   }
-
-  const notifications = await requestJson('/api/v1/notifications?limit=50', {
-    headers: { authorization: `Bearer ${token}` },
-  });
-
-  assertStatus('list notifications', notifications.response.status, 200);
-
-  const items = notifications.body?.data?.notifications || [];
-  const alertNotifications = items.filter((item) => item.alertId === alertId && item.status === 'sent');
-
-  const sentChannels = new Set(alertNotifications.map((item) => item.channel));
 
   if (!sentChannels.has('email') || !sentChannels.has('push')) {
     throw new Error('expected both email and push sent notifications for triggered alert');

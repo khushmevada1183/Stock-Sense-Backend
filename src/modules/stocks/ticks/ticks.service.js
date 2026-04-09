@@ -1,5 +1,6 @@
 const { upsertTicks, getTicks, getHistoryCandles } = require('./ticks.repository');
 const cacheManager = require('../../../utils/cacheManager');
+const { getDefaultReadDatasetType } = require('../datasetPolicy');
 const {
   normalizeIngestPayload,
   normalizeTicksQuery,
@@ -14,6 +15,7 @@ const toPositiveInt = (value, fallback) => {
 const CACHE_ENABLED = String(process.env.CACHE_ENABLED || 'true').toLowerCase() !== 'false';
 const CACHE_STOCK_TICKS_TTL_MS = toPositiveInt(process.env.CACHE_STOCK_TICKS_TTL_MS, 60 * 1000);
 const CACHE_STOCK_HISTORY_TTL_MS = toPositiveInt(process.env.CACHE_STOCK_HISTORY_TTL_MS, 5 * 60 * 1000);
+const DEFAULT_READ_DATASET_TYPE = getDefaultReadDatasetType();
 
 const stockTag = (symbol) => `stock:${symbol}`;
 
@@ -22,6 +24,7 @@ const buildTicksCacheKey = (symbol, options) => {
     from: options.from || '',
     to: options.to || '',
     limit: options.limit,
+    datasetType: options.datasetType ?? DEFAULT_READ_DATASET_TYPE ?? 'all',
   });
 };
 
@@ -31,6 +34,7 @@ const buildHistoryCacheKey = (symbol, options) => {
     from: options.from || '',
     to: options.to || '',
     limit: options.limit,
+    datasetType: options.datasetType ?? DEFAULT_READ_DATASET_TYPE ?? 'all',
   });
 };
 
@@ -66,6 +70,7 @@ const listTicks = async (symbol, queryParams) => {
       from: options.from,
       to: options.to,
       limit: options.limit,
+      datasetType: options.datasetType,
       count: items.length,
       items,
     };
@@ -85,6 +90,7 @@ const listTicks = async (symbol, queryParams) => {
     from: options.from,
     to: options.to,
     limit: options.limit,
+    datasetType: options.datasetType,
     count: items.length,
     items,
   };
@@ -108,6 +114,7 @@ const listHistory = async (symbol, queryParams) => {
       from: options.from,
       to: options.to,
       limit: options.limit,
+      datasetType: options.datasetType,
       source: result.source,
       count: result.items.length,
       items: result.items,
@@ -129,6 +136,7 @@ const listHistory = async (symbol, queryParams) => {
     from: options.from,
     to: options.to,
     limit: options.limit,
+    datasetType: options.datasetType,
     source: result.source,
     count: result.items.length,
     items: result.items,

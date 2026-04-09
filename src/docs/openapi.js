@@ -2393,6 +2393,12 @@ const openApiSpec = {
           { name: 'from', in: 'query', schema: { type: 'string', format: 'date-time' } },
           { name: 'to', in: 'query', schema: { type: 'string', format: 'date-time' } },
           { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 1000 } },
+          {
+            name: 'dataset',
+            in: 'query',
+            schema: { type: 'string', enum: ['prod', 'test'], default: 'prod' },
+            description: 'Dataset selector. Defaults to production data.',
+          },
         ],
         responses: {
           200: successResponse,
@@ -2419,6 +2425,21 @@ const openApiSpec = {
                     type: 'object',
                     properties: {
                       source: { type: 'string' },
+                      datasetType: {
+                        type: 'string',
+                        enum: ['prod', 'test'],
+                        description: 'Optional default datasetType for all ticks in this request',
+                      },
+                      timeframe: {
+                        type: 'string',
+                        enum: ['tick', '1m', '5m', '15m', '1d'],
+                        description: 'Optional default timeframe for all ticks in this request',
+                      },
+                      sourceFamily: {
+                        type: 'string',
+                        enum: ['historical', 'live', 'smoke', 'backfill', 'manual'],
+                        description: 'Optional default source-family for all ticks in this request',
+                      },
                       ticks: {
                         type: 'array',
                         items: { $ref: '#/components/schemas/TickPayload' },
@@ -2722,6 +2743,7 @@ const openApiSpec = {
       get: {
         tags: ['Stocks'],
         summary: 'Get stock profile/details by symbol',
+        description: 'Returns merged profile data from upstream and local master/profile tables, plus latest metrics snapshot when available.',
         parameters: [
           { name: 'symbol', in: 'path', required: true, schema: { type: 'string' } },
         ],
@@ -2761,6 +2783,12 @@ const openApiSpec = {
           { name: 'from', in: 'query', schema: { type: 'string', format: 'date-time' } },
           { name: 'to', in: 'query', schema: { type: 'string', format: 'date-time' } },
           { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 1000 } },
+          {
+            name: 'dataset',
+            in: 'query',
+            schema: { type: 'string', enum: ['prod', 'test'], default: 'prod' },
+            description: 'Dataset selector. Defaults to production data.',
+          },
         ],
         responses: {
           200: successResponse,
@@ -3201,6 +3229,13 @@ const openApiSpec = {
           close: { type: 'number' },
           volume: { type: 'integer', minimum: 0, nullable: true },
           source: { type: 'string' },
+          datasetType: { type: 'string', enum: ['prod', 'test'], nullable: true },
+          timeframe: { type: 'string', enum: ['tick', '1m', '5m', '15m', '1d'], nullable: true },
+          sourceFamily: {
+            type: 'string',
+            enum: ['historical', 'live', 'smoke', 'backfill', 'manual'],
+            nullable: true,
+          },
           metadata: { type: 'object', additionalProperties: true },
         },
       },

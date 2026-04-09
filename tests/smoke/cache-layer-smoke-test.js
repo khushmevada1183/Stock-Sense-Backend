@@ -43,6 +43,9 @@ const run = async () => {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       source: 'cache-smoke',
+      datasetType: 'test',
+      timeframe: '1m',
+      sourceFamily: 'smoke',
       ticks: [0, 1, 2].map((offset) => ({
         timestamp: new Date(now - offset * 60 * 1000).toISOString(),
         open: 100 + offset,
@@ -56,12 +59,19 @@ const run = async () => {
 
   assertStatus('tick ingest', ingest.response.status, 201);
 
-  const historyPath = `/api/v1/stocks/${symbol}/history?bucket=1m&limit=10`;
+  const historyPath = `/api/v1/stocks/${symbol}/history?bucket=1m&limit=10&dataset=test`;
   const history1 = await requestJson(historyPath);
   assertStatus('stock history 1', history1.response.status, 200);
 
   const history2 = await requestJson(historyPath);
   assertStatus('stock history 2', history2.response.status, 200);
+
+  const historyProd = await requestJson(`/api/v1/stocks/${symbol}/history?bucket=1m&limit=10&dataset=prod`);
+  assertStatus('stock history prod', historyProd.response.status, 200);
+
+  if (Number(historyProd.body?.data?.count || 0) !== 0) {
+    throw new Error('expected prod dataset history to exclude smoke/test rows');
+  }
 
   const afterStats = await requestJson('/api/admin/cache/stats');
   assertStatus('cache stats after', afterStats.response.status, 200);

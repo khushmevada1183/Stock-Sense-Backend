@@ -1,4 +1,8 @@
 const { query } = require('../../db/client');
+const {
+  getDefaultReadDatasetType,
+  normalizeDatasetType,
+} = require('../stocks/datasetPolicy');
 
 const alertSelectSql = `
   SELECT
@@ -149,10 +153,13 @@ const listActiveAlerts = async () => {
   return result.rows;
 };
 
-const getSymbolTickSnapshots = async (symbols) => {
+const getSymbolTickSnapshots = async (symbols, options = {}) => {
   const normalizedSymbols = Array.isArray(symbols)
     ? [...new Set(symbols.map((symbol) => String(symbol || '').trim().toUpperCase()).filter(Boolean))]
     : [];
+
+  const requestedDatasetType = normalizeDatasetType(options.datasetType);
+  const datasetType = requestedDatasetType || getDefaultReadDatasetType();
 
   if (normalizedSymbols.length === 0) {
     return [];
@@ -169,6 +176,7 @@ const getSymbolTickSnapshots = async (symbols) => {
           ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY ts DESC) AS rn
         FROM stock_price_ticks
         WHERE symbol = ANY($1::text[])
+          AND ($2::text IS NULL OR dataset_type = $2)
       ),
       latest AS (
         SELECT
@@ -203,7 +211,7 @@ const getSymbolTickSnapshots = async (symbols) => {
       LEFT JOIN previous ON previous.symbol = latest.symbol
       LEFT JOIN volume_reference ON volume_reference.symbol = latest.symbol;
     `,
-    [normalizedSymbols]
+    [normalizedSymbols, datasetType]
   );
 
   return result.rows;

@@ -1,4 +1,5 @@
 const { query, withTransaction } = require('../../db/client');
+const { getDatasetFilterClause } = require('../stocks/datasetPolicy');
 
 const normalizeNumeric = (value) => {
   const parsed = Number(value);
@@ -403,6 +404,7 @@ const getLatestPricesBySymbols = async (symbols = []) => {
           t.ts
         FROM stock_price_ticks t
         WHERE t.symbol = ANY($1::text[])
+          AND ${getDatasetFilterClause('t.dataset_type')}
         ORDER BY t.symbol, t.ts DESC
       ), previous AS (
         SELECT DISTINCT ON (t.symbol)
@@ -411,6 +413,7 @@ const getLatestPricesBySymbols = async (symbols = []) => {
         FROM stock_price_ticks t
         JOIN latest l ON l.symbol = t.symbol
         WHERE t.ts < l.ts
+          AND ${getDatasetFilterClause('t.dataset_type')}
         ORDER BY t.symbol, t.ts DESC
       )
       SELECT
@@ -442,6 +445,7 @@ const getDailyCloseSeriesBySymbols = async ({ symbols = [], from, to }) => {
         t.ts AS "asOf"
       FROM stock_price_ticks t
       WHERE t.symbol = ANY($1::text[])
+        AND ${getDatasetFilterClause('t.dataset_type')}
         AND DATE(t.ts) >= $2::date
         AND DATE(t.ts) <= $3::date
       ORDER BY t.symbol, DATE(t.ts), t.ts DESC;
@@ -487,6 +491,7 @@ const listHoldings = async ({ userId, portfolioId = null }) => {
           t.ts
         FROM stock_price_ticks t
         JOIN aggregated a ON a.symbol = t.symbol
+        WHERE ${getDatasetFilterClause('t.dataset_type')}
         ORDER BY t.symbol, t.ts DESC
       ),
       previous_prices AS (
@@ -496,6 +501,7 @@ const listHoldings = async ({ userId, portfolioId = null }) => {
         FROM stock_price_ticks t
         JOIN latest_prices lp ON lp.symbol = t.symbol
         WHERE t.ts < lp.ts
+          AND ${getDatasetFilterClause('t.dataset_type')}
         ORDER BY t.symbol, t.ts DESC
       )
       SELECT

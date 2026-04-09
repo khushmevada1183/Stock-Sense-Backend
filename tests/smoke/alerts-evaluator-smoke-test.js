@@ -74,6 +74,9 @@ const run = async () => {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       source: 'alerts-evaluator-smoke',
+      datasetType: 'test',
+      timeframe: '1m',
+      sourceFamily: 'smoke',
       ticks: [
         {
           timestamp: new Date(now - 60 * 1000).toISOString(),
@@ -97,7 +100,10 @@ const run = async () => {
 
   assertStatus('ingest ticks', ingestResponse.response.status, 201);
 
-  const evaluationSummary = await evaluateActiveAlerts({ cooldownSeconds: 1 });
+  const evaluationSummary = await evaluateActiveAlerts({
+    cooldownSeconds: 1,
+    datasetType: 'test',
+  });
 
   if (evaluationSummary.triggeredCount < 1) {
     throw new Error('evaluator: expected at least one triggered alert');

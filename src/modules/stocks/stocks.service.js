@@ -7,6 +7,8 @@ const {
   upsertSectorTaxonomyRows,
   getSectorTaxonomyBySymbol,
   listSectorPeersBySector,
+  getStockProfileDetailsBySymbol,
+  getLatestStockMetricsSnapshotBySymbol,
 } = require('./stocks.repository');
 const {
   assertSymbol,
@@ -154,6 +156,29 @@ const SYMBOL_PATTERN = /^[A-Z0-9.&_-]{1,20}$/;
 const normalizeLabel = (value, fallback = 'UNKNOWN') => {
   const normalized = String(value || '').trim();
   return normalized ? normalized : fallback;
+};
+
+const coalesceValue = (...values) => {
+  for (const value of values) {
+    if (value !== undefined && value !== null && value !== '') {
+      return value;
+    }
+  }
+
+  return null;
+};
+
+const toIsoDateOrNull = (value) => {
+  if (!value) {
+    return null;
+  }
+
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date.toISOString().slice(0, 10);
 };
 
 const extractStringByKeys = (payload, keys) => {
@@ -409,12 +434,87 @@ const searchStocks = async (queryParams) => {
 
 const getStockProfile = async (rawSymbol) => {
   const symbol = assertSymbol(rawSymbol);
-  const rawProfile = await legacyApi.getCompanyProfile(symbol);
+  const [rawProfile, dbProfile, dbMetrics] = await Promise.all([
+    legacyApi.getCompanyProfile(symbol),
+    getStockProfileDetailsBySymbol(symbol),
+    getLatestStockMetricsSnapshotBySymbol(symbol),
+  ]);
+
+  const legacyProfile = unwrapPayload(rawProfile) || {};
+
+  const profile = {
+    ...(legacyProfile && typeof legacyProfile === 'object' ? legacyProfile : {}),
+    symbol,
+    companyName: coalesceValue(dbProfile?.companyName, legacyProfile.companyName, legacyProfile.name),
+    exchange: coalesceValue(dbProfile?.exchange, legacyProfile.exchange),
+    isin: coalesceValue(dbProfile?.isin, legacyProfile.isin),
+    nseSymbol: coalesceValue(dbProfile?.nseSymbol, legacyProfile.nseSymbol, symbol),
+    bseCode: coalesceValue(dbProfile?.bseCode, legacyProfile.bseCode),
+    series: coalesceValue(dbProfile?.series, legacyProfile.series),
+    sector: coalesceValue(dbProfile?.sector, legacyProfile.sector),
+    industry: coalesceValue(dbProfile?.industry, legacyProfile.industry),
+    logoUrl: coalesceValue(dbProfile?.logoUrl, legacyProfile.logoUrl, legacyProfile.logo),
+    website: coalesceValue(
+      dbProfile?.profileWebsite,
+      dbProfile?.stocksMasterWebsite,
+      legacyProfile.website,
+      legacyProfile.companyWebsite
+    ),
+    headquarters: coalesceValue(
+      dbProfile?.profileHeadquarters,
+      dbProfile?.stocksMasterHeadquarters,
+      legacyProfile.headquarters
+    ),
+    foundedYear: coalesceValue(
+      dbProfile?.profileFoundedYear,
+      dbProfile?.stocksMasterFoundedYear,
+      legacyProfile.foundedYear
+    ),
+    employees: coalesceValue(
+      dbProfile?.profileEmployees,
+      dbProfile?.stocksMasterEmployees,
+      legacyProfile.employees
+    ),
+    businessSummary: coalesceValue(
+      dbProfile?.businessSummary,
+      dbProfile?.stocksMasterDescription,
+      legacyProfile.businessSummary,
+      legacyProfile.description
+    ),
+    companyHistory: coalesceValue(dbProfile?.companyHistory, legacyProfile.companyHistory),
+    management: coalesceValue(dbProfile?.managementPayload, legacyProfile.management, null),
+    metadata: {
+      profileSource: dbProfile?.profileSource || null,
+      stocksMasterSource: dbProfile?.stocksMasterSource || null,
+      profileUpdatedAt: dbProfile?.profileUpdatedAt || null,
+    },
+  };
+
+  const metrics = dbMetrics
+    ? {
+        symbol: dbMetrics.symbol,
+        asOfDate: toIsoDateOrNull(dbMetrics.asOfDate),
+        week52High: toFiniteNumber(dbMetrics.week52High),
+        week52Low: toFiniteNumber(dbMetrics.week52Low),
+        week52HighDate: toIsoDateOrNull(dbMetrics.week52HighDate),
+        week52LowDate: toIsoDateOrNull(dbMetrics.week52LowDate),
+        high3m: toFiniteNumber(dbMetrics.high3m),
+        low3m: toFiniteNumber(dbMetrics.low3m),
+        high12m: toFiniteNumber(dbMetrics.high12m),
+        low12m: toFiniteNumber(dbMetrics.low12m),
+        return3mPercent: toFiniteNumber(dbMetrics.return3mPercent),
+        return12mPercent: toFiniteNumber(dbMetrics.return12mPercent),
+        avgVolume20d: toFiniteNumber(dbMetrics.avgVolume20d),
+        source: dbMetrics.source,
+        metadata: dbMetrics.metadata || {},
+      }
+    : null;
 
   return {
     symbol,
-    source: 'stock-nse-india',
-    profile: unwrapPayload(rawProfile),
+    source: dbProfile ? 'stocks_master+stock_profile_details' : 'stock-nse-india',
+    profile,
+    metrics,
   };
 };
 

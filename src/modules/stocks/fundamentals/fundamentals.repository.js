@@ -1,4 +1,5 @@
 const db = require('../../../db/client');
+const { getDatasetFilterClause } = require('../datasetPolicy');
 
 const toIsoDate = (value) => {
   if (!value) {
@@ -202,6 +203,7 @@ async function listRecentSymbolsFromTicks(limit = 40) {
         symbol,
         MAX(ts) AS latest_ts
       FROM stock_price_ticks
+      WHERE ${getDatasetFilterClause('dataset_type')}
       GROUP BY symbol
     ) latest
     ORDER BY latest_ts DESC

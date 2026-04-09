@@ -5,6 +5,96 @@ const toPositiveInt = (value, fallback) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };
 
+const normalizeSymbol = (value) => String(value || '').trim().toUpperCase();
+
+const normalizeSymbolList = (values = []) => {
+  return Array.from(new Set(
+    (Array.isArray(values) ? values : [])
+      .map((value) => normalizeSymbol(value))
+      .filter(Boolean)
+  ));
+};
+
+let newsArticleSymbolsBridgeAvailable;
+
+const isNewsArticleSymbolsBridgeAvailable = async () => {
+  if (typeof newsArticleSymbolsBridgeAvailable === 'boolean') {
+    return newsArticleSymbolsBridgeAvailable;
+  }
+
+  try {
+    const result = await query(`
+      SELECT to_regclass('public.news_article_symbols') IS NOT NULL AS available;
+    `);
+
+    newsArticleSymbolsBridgeAvailable = Boolean(result.rows[0]?.available);
+  } catch (_error) {
+    newsArticleSymbolsBridgeAvailable = false;
+  }
+
+  return newsArticleSymbolsBridgeAvailable;
+};
+
+const buildSymbolFilterClause = (parameterIndex, useBridgeTable) => {
+  const legacyClause = `$${parameterIndex} = ANY(symbols)`;
+
+  if (!useBridgeTable) {
+    return legacyClause;
+  }
+
+  return `(
+    EXISTS (
+      SELECT 1
+      FROM news_article_symbols nas
+      WHERE nas.article_id = news_articles.id
+        AND nas.symbol = $${parameterIndex}
+    )
+    OR ${legacyClause}
+  )`;
+};
+
+const syncNewsArticleSymbols = async (articleId, symbols = []) => {
+  const normalizedSymbols = normalizeSymbolList(symbols);
+
+  try {
+    await query(
+      `
+        DELETE FROM news_article_symbols
+        WHERE article_id = $1::uuid;
+      `,
+      [articleId]
+    );
+
+    if (normalizedSymbols.length === 0) {
+      return;
+    }
+
+    const values = [articleId];
+
+    const placeholders = normalizedSymbols.map((symbol, index) => {
+      values.push(symbol);
+      const symbolParam = index + 2;
+      return `($1::uuid, $${symbolParam}, 1)`;
+    });
+
+    await query(
+      `
+        INSERT INTO news_article_symbols (article_id, symbol, relevance_score)
+        VALUES ${placeholders.join(', ')}
+        ON CONFLICT (article_id, symbol)
+        DO UPDATE SET relevance_score = EXCLUDED.relevance_score;
+      `,
+      values
+    );
+  } catch (error) {
+    if (error.code === '42P01') {
+      return;
+    }
+
+    throw error;
+  }
+};
+
 const buildNewsWhereClause = ({
   category = null,
   sentiment = null,
@@ -13,7 +103,7 @@ const buildNewsWhereClause = ({
   fromDate = null,
   toDate = null,
   queryText = null,
-} = {}) => {
+} = {}, useBridgeTable = false) => {
   const clauses = [];
   const values = [];
 
@@ -34,7 +124,7 @@ const buildNewsWhereClause = ({
 
   if (symbol) {
     values.push(symbol);
-    clauses.push(`$${values.length} = ANY(symbols)`);
+    clauses.push(buildSymbolFilterClause(values.length, useBridgeTable));
   }
 
   if (fromDate) {
@@ -146,6 +236,8 @@ const upsertNewsArticles = async (rows) => {
       ]
     );
 
+    await syncNewsArticleSymbols(result.rows[0].id, row.symbols || []);
+
     saved.push(result.rows[0]);
   }
 
@@ -214,6 +306,7 @@ const listNewsFeed = async ({
   limit = 25,
   offset = 0,
 } = {}) => {
+  const useBridgeTable = await isNewsArticleSymbolsBridgeAvailable();
   const filters = buildNewsWhereClause({
     category,
     sentiment,
@@ -222,7 +315,7 @@ const listNewsFeed = async ({
     fromDate,
     toDate,
     queryText,
-  });
+  }, useBridgeTable);
 
   const values = [...filters.values, toPositiveInt(limit, 25), Math.max(0, offset)];
 
@@ -265,6 +358,7 @@ const listNewsFeed = async ({
 };
 
 const listTrendingNews = async ({ hours = 24, limit = 20, category = null, symbol = null } = {}) => {
+  const useBridgeTable = await isNewsArticleSymbolsBridgeAvailable();
   const clauses = [`published_at >= NOW() - ($1::int || ' hours')::interval`];
   const values = [toPositiveInt(hours, 24)];
 
@@ -275,7 +369,7 @@ const listTrendingNews = async ({ hours = 24, limit = 20, category = null, symbo
 
   if (symbol) {
     values.push(symbol);
-    clauses.push(`$${values.length} = ANY(symbols)`);
+    clauses.push(buildSymbolFilterClause(values.length, useBridgeTable));
   }
 
   values.push(toPositiveInt(limit, 20));
@@ -316,6 +410,7 @@ const listNewsAlerts = async ({
   minScore = 0.4,
   symbol = null,
 } = {}) => {
+  const useBridgeTable = await isNewsArticleSymbolsBridgeAvailable();
   const clauses = [
     `published_at >= NOW() - ($1::int || ' hours')::interval`,
     `sentiment_confidence >= $2`,
@@ -325,7 +420,7 @@ const listNewsAlerts = async ({
 
   if (symbol) {
     values.push(symbol);
-    clauses.push(`$${values.length} = ANY(symbols)`);
+    clauses.push(buildSymbolFilterClause(values.length, useBridgeTable));
   }
 
   values.push(toPositiveInt(limit, 20));
@@ -357,12 +452,13 @@ const listNewsAlerts = async ({
 };
 
 const getNewsSentimentSummary = async ({ hours = 24, symbol = null } = {}) => {
+  const useBridgeTable = await isNewsArticleSymbolsBridgeAvailable();
   const values = [toPositiveInt(hours, 24)];
   const clauses = [`published_at >= NOW() - ($1::int || ' hours')::interval`];
 
   if (symbol) {
     values.push(symbol);
-    clauses.push(`$${values.length} = ANY(symbols)`);
+    clauses.push(buildSymbolFilterClause(values.length, useBridgeTable));
   }
 
   const result = await query(
@@ -576,6 +672,9 @@ const listLatestSocialSentiment = async ({ symbol = null, limit = 40 } = {}) => 
 };
 
 const listStockSentimentHistory = async ({ symbol, days = 14, limit = 30 } = {}) => {
+  const useBridgeTable = await isNewsArticleSymbolsBridgeAvailable();
+  const symbolClause = buildSymbolFilterClause(1, useBridgeTable);
+
   const result = await query(
     `
       SELECT
@@ -597,7 +696,7 @@ const listStockSentimentHistory = async ({ symbol, days = 14, limit = 30 } = {})
           AVG(sentiment_confidence)::numeric(10,4) AS avg_sentiment_confidence
         FROM news_articles
         WHERE
-          $1 = ANY(symbols)
+          ${symbolClause}
           AND published_at >= NOW() - ($2::int || ' days')::interval
         GROUP BY day_bucket
       ) AS grouped

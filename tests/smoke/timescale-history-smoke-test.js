@@ -3,7 +3,7 @@
 const BASE_URL = process.env.BASE_URL || 'http://localhost:10000';
 
 const run = async () => {
-  const symbol = 'TCS';
+  const symbol = `TSMOKE${Date.now().toString().slice(-6)}`;
   const now = Date.now();
 
   const ticks = [0, 1, 2, 3, 4, 5].map((offset) => {
@@ -25,7 +25,13 @@ const run = async () => {
   const ingestRes = await fetch(`${BASE_URL}/api/v1/stocks/${symbol}/ticks`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ source: 'timescale-smoke', ticks }),
+    body: JSON.stringify({
+      source: 'timescale-smoke',
+      datasetType: 'test',
+      timeframe: '1m',
+      sourceFamily: 'smoke',
+      ticks,
+    }),
   });
 
   const ingestBody = await ingestRes.json();
@@ -36,9 +42,22 @@ const run = async () => {
   const buckets = ['1m', '5m', '15m', '1d'];
   const results = {};
 
+  const prodHistoryRes = await fetch(
+    `${BASE_URL}/api/v1/stocks/${symbol}/history?bucket=1m&limit=20&dataset=prod`
+  );
+  const prodHistoryBody = await prodHistoryRes.json();
+
+  if (prodHistoryRes.status !== 200) {
+    throw new Error(`history(prod) failed: ${prodHistoryRes.status} ${JSON.stringify(prodHistoryBody)}`);
+  }
+
+  if (Number(prodHistoryBody?.data?.count || 0) !== 0) {
+    throw new Error('history(prod) should not include smoke/test dataset rows');
+  }
+
   for (const bucket of buckets) {
     const historyRes = await fetch(
-      `${BASE_URL}/api/v1/stocks/${symbol}/history?bucket=${bucket}&limit=20`
+      `${BASE_URL}/api/v1/stocks/${symbol}/history?bucket=${bucket}&limit=20&dataset=test`
     );
 
     const historyBody = await historyRes.json();

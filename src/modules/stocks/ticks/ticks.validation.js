@@ -1,10 +1,15 @@
 const { ApiError } = require('../../../utils/errorHandler');
+const { getDefaultReadDatasetType } = require('../datasetPolicy');
 
 const DEFAULT_LIMIT = 200;
 const MAX_LIMIT = 1000;
 const MAX_BATCH_SIZE = 2000;
 const DEFAULT_HISTORY_BUCKET = '1d';
 const ALLOWED_HISTORY_BUCKETS = new Set(['1m', '5m', '15m', '1d']);
+const ALLOWED_DATASET_TYPES = new Set(['prod', 'test']);
+const ALLOWED_TICK_TIMEFRAMES = new Set(['tick', '1m', '5m', '15m', '1d']);
+const ALLOWED_SOURCE_FAMILIES = new Set(['historical', 'live', 'smoke', 'backfill', 'manual']);
+const DEFAULT_READ_DATASET_TYPE = getDefaultReadDatasetType();
 
 const assertSymbol = (rawSymbol) => {
   const symbol = String(rawSymbol || '').trim().toUpperCase();
@@ -58,7 +63,20 @@ const parseVolume = (value) => {
   return parsed;
 };
 
-const normalizeTick = (tick, index, fallbackSource) => {
+const parseAllowedLower = (value, fieldName, allowedValues, fallback = null) => {
+  if (value === undefined || value === null || value === '') {
+    return fallback;
+  }
+
+  const normalized = String(value).trim().toLowerCase();
+  if (!allowedValues.has(normalized)) {
+    throw new ApiError(`${fieldName} is invalid`, 400, 'ERR_INVALID_PAYLOAD');
+  }
+
+  return normalized;
+};
+
+const normalizeTick = (tick, index, fallback = {}) => {
   if (!tick || typeof tick !== 'object' || Array.isArray(tick)) {
     throw new ApiError(`Tick at index ${index} must be an object`, 400, 'ERR_INVALID_PAYLOAD');
   }
@@ -73,7 +91,25 @@ const normalizeTick = (tick, index, fallbackSource) => {
   const low = parseNumber(tick.low, `ticks[${index}].low`);
   const close = parseNumber(tick.close, `ticks[${index}].close`, true);
   const volume = parseVolume(tick.volume);
-  const source = String(tick.source || fallbackSource || 'nse').trim().toLowerCase();
+  const source = String(tick.source || fallback.source || 'nse').trim().toLowerCase();
+  const datasetType = parseAllowedLower(
+    tick.datasetType,
+    `ticks[${index}].datasetType`,
+    ALLOWED_DATASET_TYPES,
+    fallback.datasetType || null
+  );
+  const timeframe = parseAllowedLower(
+    tick.timeframe,
+    `ticks[${index}].timeframe`,
+    ALLOWED_TICK_TIMEFRAMES,
+    fallback.timeframe || null
+  );
+  const sourceFamily = parseAllowedLower(
+    tick.sourceFamily,
+    `ticks[${index}].sourceFamily`,
+    ALLOWED_SOURCE_FAMILIES,
+    fallback.sourceFamily || null
+  );
   const metadata = tick.metadata && typeof tick.metadata === 'object' && !Array.isArray(tick.metadata)
     ? tick.metadata
     : {};
@@ -90,6 +126,9 @@ const normalizeTick = (tick, index, fallbackSource) => {
     close,
     volume,
     source,
+    datasetType,
+    timeframe,
+    sourceFamily,
     metadata,
   };
 };
@@ -112,10 +151,24 @@ const normalizeIngestPayload = (rawSymbol, body) => {
   }
 
   const fallbackSource = body && typeof body === 'object' ? body.source : undefined;
+  const fallbackDatasetType = body && typeof body === 'object'
+    ? parseAllowedLower(body.datasetType, 'datasetType', ALLOWED_DATASET_TYPES, null)
+    : null;
+  const fallbackTimeframe = body && typeof body === 'object'
+    ? parseAllowedLower(body.timeframe, 'timeframe', ALLOWED_TICK_TIMEFRAMES, null)
+    : null;
+  const fallbackSourceFamily = body && typeof body === 'object'
+    ? parseAllowedLower(body.sourceFamily, 'sourceFamily', ALLOWED_SOURCE_FAMILIES, null)
+    : null;
 
   return {
     symbol,
-    ticks: ticks.map((tick, index) => normalizeTick(tick, index, fallbackSource)),
+    ticks: ticks.map((tick, index) => normalizeTick(tick, index, {
+      source: fallbackSource,
+      datasetType: fallbackDatasetType,
+      timeframe: fallbackTimeframe,
+      sourceFamily: fallbackSourceFamily,
+    })),
   };
 };
 
@@ -123,6 +176,12 @@ const normalizeTicksQuery = (rawSymbol, query) => {
   const symbol = assertSymbol(rawSymbol);
   const from = parseDateValue(query.from, 'from');
   const to = parseDateValue(query.to, 'to');
+  const datasetType = parseAllowedLower(
+    query.dataset ?? query.datasetType,
+    'dataset',
+    ALLOWED_DATASET_TYPES,
+    DEFAULT_READ_DATASET_TYPE
+  );
 
   let limit = Number.parseInt(query.limit, 10);
   if (!Number.isFinite(limit)) {
@@ -142,6 +201,7 @@ const normalizeTicksQuery = (rawSymbol, query) => {
     from,
     to,
     limit,
+    datasetType,
   };
 };
 
