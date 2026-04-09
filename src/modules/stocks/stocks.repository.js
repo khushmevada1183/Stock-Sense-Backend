@@ -316,76 +316,48 @@ async function upsert52WeekLevelsRows(rows = []) {
     return 0;
   }
 
-  const sanitizedRows = rows
-    .map((row) => ({
-      symbol: normalizeSymbol(row.symbol),
-      week52High: row.week52High ?? null,
-      week52Low: row.week52Low ?? null,
-      highDate: toIsoDate(row.highDate),
-      lowDate: toIsoDate(row.lowDate),
-      currentPrice: row.currentPrice ?? null,
-      distanceFromHighPercent: row.distanceFromHighPercent ?? null,
-      distanceFromLowPercent: row.distanceFromLowPercent ?? null,
-      source: row.source || 'stock-nse-india',
-      metadata: row.metadata || {},
-    }))
-    .filter((row) => Boolean(row.symbol));
+  const defaultAsOfDate = toIsoDate(new Date());
 
-  if (sanitizedRows.length === 0) {
+  const snapshotRows = rows
+    .map((row) => {
+      const symbol = normalizeSymbol(row.symbol);
+      if (!symbol) {
+        return null;
+      }
+
+      const normalizedMetadata = row.metadata && typeof row.metadata === 'object' ? row.metadata : {};
+
+      return {
+        symbol,
+        asOfDate: toIsoDate(row.asOfDate) || defaultAsOfDate,
+        week52High: row.week52High ?? null,
+        week52Low: row.week52Low ?? null,
+        week52HighDate: toIsoDate(row.highDate || row.week52HighDate),
+        week52LowDate: toIsoDate(row.lowDate || row.week52LowDate),
+        high3m: null,
+        low3m: null,
+        return3mPercent: null,
+        return12mPercent: null,
+        avgVolume20d: null,
+        source: row.source || 'stock-nse-india',
+        metadata: {
+          ...normalizedMetadata,
+          legacy52WeekTracking: {
+            currentPrice: row.currentPrice ?? null,
+            distanceFromHighPercent: row.distanceFromHighPercent ?? null,
+            distanceFromLowPercent: row.distanceFromLowPercent ?? null,
+          },
+        },
+      };
+    })
+    .filter(Boolean);
+
+  if (snapshotRows.length === 0) {
     return 0;
   }
 
-  const values = [];
-  const placeholders = sanitizedRows.map((row, index) => {
-    const offset = index * 10;
-    values.push(
-      row.symbol,
-      row.week52High,
-      row.week52Low,
-      row.highDate,
-      row.lowDate,
-      row.currentPrice,
-      row.distanceFromHighPercent,
-      row.distanceFromLowPercent,
-      row.source,
-      JSON.stringify(row.metadata)
-    );
-
-    return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}::date, $${offset + 5}::date, $${offset + 6}, $${offset + 7}, $${offset + 8}, $${offset + 9}, $${offset + 10}::jsonb)`;
-  });
-
-  const result = await query(
-    `
-      INSERT INTO stock_52_week_levels (
-        symbol,
-        week_52_high,
-        week_52_low,
-        high_date,
-        low_date,
-        current_price,
-        distance_from_high_percent,
-        distance_from_low_percent,
-        source,
-        metadata
-      )
-      VALUES ${placeholders.join(', ')}
-      ON CONFLICT (symbol)
-      DO UPDATE SET
-        week_52_high = EXCLUDED.week_52_high,
-        week_52_low = EXCLUDED.week_52_low,
-        high_date = EXCLUDED.high_date,
-        low_date = EXCLUDED.low_date,
-        current_price = EXCLUDED.current_price,
-        distance_from_high_percent = EXCLUDED.distance_from_high_percent,
-        distance_from_low_percent = EXCLUDED.distance_from_low_percent,
-        source = EXCLUDED.source,
-        metadata = EXCLUDED.metadata,
-        updated_at = NOW();
-    `,
-    values
-  );
-
-  return result.rowCount;
+  // Legacy 52-week sync now writes into canonical stock_metrics_snapshots.
+  return upsertStockMetricsSnapshots(snapshotRows);
 }
 
 async function list52WeekLevels({ type = 'high', sector = null, limit = 25 }) {
@@ -394,31 +366,84 @@ async function list52WeekLevels({ type = 'high', sector = null, limit = 25 }) {
   const normalizedLimit = Math.min(toPositiveInt(limit, 25), 200);
 
   const orderBy = normalizedType === 'low'
-    ? 'l.distance_from_low_percent ASC NULLS LAST, l.week_52_low ASC NULLS LAST, l.current_price ASC NULLS LAST'
-    : 'l.distance_from_high_percent ASC NULLS LAST, l.week_52_high DESC NULLS LAST, l.current_price DESC NULLS LAST';
+    ? 'distance_from_low_percent ASC NULLS LAST, week_52_low ASC NULLS LAST, current_price ASC NULLS LAST'
+    : 'distance_from_high_percent ASC NULLS LAST, week_52_high DESC NULLS LAST, current_price DESC NULLS LAST';
 
   const result = await query(
     `
+      WITH latest_metrics AS (
+        SELECT DISTINCT ON (symbol)
+          symbol,
+          as_of_date,
+          week_52_high,
+          week_52_low,
+          week_52_high_date,
+          week_52_low_date,
+          source,
+          metadata,
+          created_at,
+          updated_at
+        FROM stock_metrics_snapshots
+        WHERE week_52_high IS NOT NULL
+           OR week_52_low IS NOT NULL
+        ORDER BY symbol, as_of_date DESC
+      ),
+      latest_ticks AS (
+        SELECT DISTINCT ON (t.symbol)
+          t.symbol,
+          COALESCE(t.close, t.high, t.low, t.open)::DOUBLE PRECISION AS current_price
+        FROM stock_price_ticks t
+        WHERE ${getDatasetFilterClause('t.dataset_type')}
+        ORDER BY t.symbol, t.ts DESC
+      ),
+      ranked AS (
+        SELECT
+          m.symbol,
+          COALESCE(sm.company_name, t.company_name, m.symbol) AS company_name,
+          COALESCE(t.sector, sm.sector) AS sector,
+          COALESCE(t.industry, sm.industry) AS industry,
+          t.market_cap,
+          m.week_52_high,
+          m.week_52_low,
+          m.week_52_high_date,
+          m.week_52_low_date,
+          tick.current_price,
+          CASE
+            WHEN m.week_52_high IS NULL OR m.week_52_high = 0 OR tick.current_price IS NULL THEN NULL
+            ELSE ((m.week_52_high - tick.current_price) / m.week_52_high) * 100
+          END AS distance_from_high_percent,
+          CASE
+            WHEN m.week_52_low IS NULL OR m.week_52_low = 0 OR tick.current_price IS NULL THEN NULL
+            ELSE ((tick.current_price - m.week_52_low) / m.week_52_low) * 100
+          END AS distance_from_low_percent,
+          m.source,
+          m.metadata,
+          m.created_at,
+          m.updated_at
+        FROM latest_metrics m
+        LEFT JOIN latest_ticks tick ON tick.symbol = m.symbol
+        LEFT JOIN stock_sector_taxonomy t ON t.symbol = m.symbol
+        LEFT JOIN stocks_master sm ON sm.symbol = m.symbol AND sm.is_active = TRUE
+      )
       SELECT
-        l.symbol,
-        t.company_name AS "companyName",
-        t.sector,
-        t.industry,
-        t.market_cap AS "marketCap",
-        l.week_52_high AS "week52High",
-        l.week_52_low AS "week52Low",
-        l.high_date AS "highDate",
-        l.low_date AS "lowDate",
-        l.current_price AS "currentPrice",
-        l.distance_from_high_percent AS "distanceFromHighPercent",
-        l.distance_from_low_percent AS "distanceFromLowPercent",
-        l.source,
-        l.metadata,
-        l.created_at AS "createdAt",
-        l.updated_at AS "updatedAt"
-      FROM stock_52_week_levels l
-      LEFT JOIN stock_sector_taxonomy t ON t.symbol = l.symbol
-      WHERE ($1::text IS NULL OR LOWER(t.sector) = LOWER($1))
+        symbol,
+        company_name AS "companyName",
+        sector,
+        industry,
+        market_cap AS "marketCap",
+        week_52_high AS "week52High",
+        week_52_low AS "week52Low",
+        week_52_high_date AS "highDate",
+        week_52_low_date AS "lowDate",
+        current_price AS "currentPrice",
+        distance_from_high_percent AS "distanceFromHighPercent",
+        distance_from_low_percent AS "distanceFromLowPercent",
+        source,
+        metadata,
+        created_at AS "createdAt",
+        updated_at AS "updatedAt"
+      FROM ranked
+      WHERE ($1::text IS NULL OR LOWER(sector) = LOWER($1))
       ORDER BY ${orderBy}
       LIMIT $2;
     `,
@@ -443,8 +468,6 @@ async function upsertStockMetricsSnapshots(rows = []) {
       week52LowDate: toIsoDate(row.week52LowDate),
       high3m: row.high3m ?? null,
       low3m: row.low3m ?? null,
-      high12m: row.high12m ?? null,
-      low12m: row.low12m ?? null,
       return3mPercent: row.return3mPercent ?? null,
       return12mPercent: row.return12mPercent ?? null,
       avgVolume20d: toNullableNonNegativeInt(row.avgVolume20d),
@@ -464,7 +487,7 @@ async function upsertStockMetricsSnapshots(rows = []) {
     const values = [];
 
     const placeholders = batch.map((row, index) => {
-      const offset = index * 15;
+      const offset = index * 13;
 
       values.push(
         row.symbol,
@@ -475,8 +498,6 @@ async function upsertStockMetricsSnapshots(rows = []) {
         row.week52LowDate,
         row.high3m,
         row.low3m,
-        row.high12m,
-        row.low12m,
         row.return3mPercent,
         row.return12mPercent,
         row.avgVolume20d,
@@ -484,7 +505,7 @@ async function upsertStockMetricsSnapshots(rows = []) {
         JSON.stringify(row.metadata)
       );
 
-      return `($${offset + 1}, $${offset + 2}::date, $${offset + 3}, $${offset + 4}, $${offset + 5}::date, $${offset + 6}::date, $${offset + 7}, $${offset + 8}, $${offset + 9}, $${offset + 10}, $${offset + 11}, $${offset + 12}, $${offset + 13}, $${offset + 14}, $${offset + 15}::jsonb)`;
+      return `($${offset + 1}, $${offset + 2}::date, $${offset + 3}, $${offset + 4}, $${offset + 5}::date, $${offset + 6}::date, $${offset + 7}, $${offset + 8}, $${offset + 9}, $${offset + 10}, $${offset + 11}, $${offset + 12}, $${offset + 13}::jsonb)`;
     });
 
     const result = await query(
@@ -498,8 +519,6 @@ async function upsertStockMetricsSnapshots(rows = []) {
           week_52_low_date,
           high_3m,
           low_3m,
-          high_12m,
-          low_12m,
           return_3m_percent,
           return_12m_percent,
           avg_volume_20d,
@@ -515,8 +534,6 @@ async function upsertStockMetricsSnapshots(rows = []) {
           week_52_low_date = EXCLUDED.week_52_low_date,
           high_3m = EXCLUDED.high_3m,
           low_3m = EXCLUDED.low_3m,
-          high_12m = EXCLUDED.high_12m,
-          low_12m = EXCLUDED.low_12m,
           return_3m_percent = EXCLUDED.return_3m_percent,
           return_12m_percent = EXCLUDED.return_12m_percent,
           avg_volume_20d = EXCLUDED.avg_volume_20d,
@@ -550,8 +567,8 @@ async function getLatestStockMetricsSnapshotBySymbol(symbol) {
         week_52_low_date AS "week52LowDate",
         high_3m AS "high3m",
         low_3m AS "low3m",
-        high_12m AS "high12m",
-        low_12m AS "low12m",
+        week_52_high AS "high12m",
+        week_52_low AS "low12m",
         return_3m_percent AS "return3mPercent",
         return_12m_percent AS "return12mPercent",
         avg_volume_20d AS "avgVolume20d",

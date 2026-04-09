@@ -1,0 +1,1157 @@
+{
+  "ok": true,
+  "scannedTables": 39,
+  "genericColumnsIgnoredInPairScoring": [
+    "id",
+    "symbol",
+    "source",
+    "metadata",
+    "created_at",
+    "updated_at",
+    "user_id"
+  ],
+  "tableSummary": [
+    {
+      "table": "auth_audit_logs",
+      "rowCount": 32,
+      "columnCount": 8,
+      "primaryKey": [
+        "id"
+      ],
+      "uniqueColumns": [],
+      "foreignKeysOutCount": 1
+    },
+    {
+      "table": "auth_login_attempts",
+      "rowCount": 1,
+      "columnCount": 8,
+      "primaryKey": [
+        "scope",
+        "identifier"
+      ],
+      "uniqueColumns": [],
+      "foreignKeysOutCount": 0
+    },
+    {
+      "table": "block_deals",
+      "rowCount": 60,
+      "columnCount": 16,
+      "primaryKey": [
+        "id"
+      ],
+      "uniqueColumns": [
+        "deal_key"
+      ],
+      "foreignKeysOutCount": 0
+    },
+    {
+      "table": "company_financial_statements",
+      "rowCount": 8,
+      "columnCount": 8,
+      "primaryKey": [
+        "symbol",
+        "statement_type",
+        "as_of_date"
+      ],
+      "uniqueColumns": [],
+      "foreignKeysOutCount": 0
+    },
+    {
+      "table": "company_fundamentals",
+      "rowCount": 8,
+      "columnCount": 7,
+      "primaryKey": [
+        "symbol",
+        "as_of_date"
+      ],
+      "uniqueColumns": [],
+      "foreignKeysOutCount": 0
+    },
+    {
+      "table": "corporate_actions",
+      "rowCount": 560,
+      "columnCount": 17,
+      "primaryKey": [
+        "id"
+      ],
+      "uniqueColumns": [
+        "action_key"
+      ],
+      "foreignKeysOutCount": 0
+    },
+    {
+      "table": "earnings_calendar",
+      "rowCount": 270,
+      "columnCount": 18,
+      "primaryKey": [
+        "id"
+      ],
+      "uniqueColumns": [
+        "earnings_key"
+      ],
+      "foreignKeysOutCount": 0
+    },
+    {
+      "table": "email_verification_tokens",
+      "rowCount": 30,
+      "columnCount": 6,
+      "primaryKey": [
+        "id"
+      ],
+      "uniqueColumns": [],
+      "foreignKeysOutCount": 1
+    },
+    {
+      "table": "fear_greed_index_snapshots",
+      "rowCount": 1,
+      "columnCount": 12,
+      "primaryKey": [
+        "id"
+      ],
+      "uniqueColumns": [
+        "snapshot_date"
+      ],
+      "foreignKeysOutCount": 0
+    },
+    {
+      "table": "fii_dii_activity",
+      "rowCount": 204,
+      "columnCount": 11,
+      "primaryKey": [
+        "id"
+      ],
+      "uniqueColumns": [
+        "category",
+        "flow_date",
+        "segment",
+        "source"
+      ],
+      "foreignKeysOutCount": 0
+    },
+    {
+      "table": "insider_trades",
+      "rowCount": 520,
+      "columnCount": 17,
+      "primaryKey": [
+        "id"
+      ],
+      "uniqueColumns": [
+        "trade_key"
+      ],
+      "foreignKeysOutCount": 0
+    },
+    {
+      "table": "ipo_calendar",
+      "rowCount": 12,
+      "columnCount": 20,
+      "primaryKey": [
+        "id"
+      ],
+      "uniqueColumns": [
+        "external_key"
+      ],
+      "foreignKeysOutCount": 0
+    },
+    {
+      "table": "ipo_gmp_snapshots",
+      "rowCount": 29,
+      "columnCount": 11,
+      "primaryKey": [
+        "id"
+      ],
+      "uniqueColumns": [
+        "ipo_id",
+        "snapshot_date",
+        "source"
+      ],
+      "foreignKeysOutCount": 1
+    },
+    {
+      "table": "ipo_subscription_snapshots",
+      "rowCount": 29,
+      "columnCount": 12,
+      "primaryKey": [
+        "id"
+      ],
+      "uniqueColumns": [
+        "ipo_id",
+        "snapshot_date",
+        "source"
+      ],
+      "foreignKeysOutCount": 1
+    },
+    {
+      "table": "market_snapshots",
+      "rowCount": 192,
+      "columnCount": 10,
+      "primaryKey": [
+        "captured_minute"
+      ],
+      "uniqueColumns": [],
+      "foreignKeysOutCount": 0
+    },
+    {
+      "table": "mutual_fund_holdings",
+      "rowCount": 366,
+      "columnCount": 14,
+      "primaryKey": [
+        "id"
+      ],
+      "uniqueColumns": [
+        "holding_key"
+      ],
+      "foreignKeysOutCount": 0
+    },
+    {
+      "table": "news_article_symbols",
+      "rowCount": 680,
+      "columnCount": 4,
+      "primaryKey": [
+        "article_id",
+        "symbol"
+      ],
+      "uniqueColumns": [],
+      "foreignKeysOutCount": 1
+    },
+    {
+      "table": "news_articles",
+      "rowCount": 85,
+      "columnCount": 19,
+      "primaryKey": [
+        "id"
+      ],
+      "uniqueColumns": [
+        "article_key"
+      ],
+      "foreignKeysOutCount": 0
+    },
+    {
+      "table": "notification_deliveries",
+      "rowCount": 234,
+      "columnCount": 17,
+      "primaryKey": [
+        "id"
+      ],
+      "uniqueColumns": [
+        "delivery_key"
+      ],
+      "foreignKeysOutCount": 2
+    },
+    {
+      "table": "oauth_identities",
+      "rowCount": 0,
+      "columnCount": 7,
+      "primaryKey": [
+        "id"
+      ],
+      "uniqueColumns": [
+        "provider",
+        "provider_user_id"
+      ],
+      "foreignKeysOutCount": 1
+    },
+    {
+      "table": "password_reset_tokens",
+      "rowCount": 4,
+      "columnCount": 6,
+      "primaryKey": [
+        "id"
+      ],
+      "uniqueColumns": [
+        "token_hash"
+      ],
+      "foreignKeysOutCount": 1
+    },
+    {
+      "table": "portfolio_transactions",
+      "rowCount": 0,
+      "columnCount": 11,
+      "primaryKey": [
+        "id"
+      ],
+      "uniqueColumns": [],
+      "foreignKeysOutCount": 2
+    },
+    {
+      "table": "portfolios",
+      "rowCount": 0,
+      "columnCount": 6,
+      "primaryKey": [
+        "id"
+      ],
+      "uniqueColumns": [
+        "portfolio_name",
+        "user_id"
+      ],
+      "foreignKeysOutCount": 0
+    },
+    {
+      "table": "price_alerts",
+      "rowCount": 18,
+      "columnCount": 10,
+      "primaryKey": [
+        "id"
+      ],
+      "uniqueColumns": [],
+      "foreignKeysOutCount": 1
+    },
+    {
+      "table": "schema_migrations",
+      "rowCount": 36,
+      "columnCount": 4,
+      "primaryKey": [
+        "id"
+      ],
+      "uniqueColumns": [
+        "filename"
+      ],
+      "foreignKeysOutCount": 0
+    },
+    {
+      "table": "sector_heatmap_snapshots",
+      "rowCount": 11,
+      "columnCount": 12,
+      "primaryKey": [
+        "sector",
+        "captured_at"
+      ],
+      "uniqueColumns": [],
+      "foreignKeysOutCount": 0
+    },
+    {
+      "table": "shareholding_patterns",
+      "rowCount": 270,
+      "columnCount": 14,
+      "primaryKey": [
+        "id"
+      ],
+      "uniqueColumns": [
+        "pattern_key"
+      ],
+      "foreignKeysOutCount": 0
+    },
+    {
+      "table": "social_sentiment_snapshots",
+      "rowCount": 1596,
+      "columnCount": 13,
+      "primaryKey": [
+        "id"
+      ],
+      "uniqueColumns": [],
+      "foreignKeysOutCount": 0
+    },
+    {
+      "table": "stock_metrics_snapshots",
+      "rowCount": 406,
+      "columnCount": 15,
+      "primaryKey": [
+        "symbol",
+        "as_of_date"
+      ],
+      "uniqueColumns": [],
+      "foreignKeysOutCount": 0
+    },
+    {
+      "table": "stock_price_ticks",
+      "rowCount": 18876,
+      "columnCount": 14,
+      "primaryKey": [
+        "symbol",
+        "ts"
+      ],
+      "uniqueColumns": [],
+      "foreignKeysOutCount": 0
+    },
+    {
+      "table": "stock_profile_details",
+      "rowCount": 2285,
+      "columnCount": 12,
+      "primaryKey": [
+        "symbol"
+      ],
+      "uniqueColumns": [],
+      "foreignKeysOutCount": 0
+    },
+    {
+      "table": "stock_sector_taxonomy",
+      "rowCount": 49,
+      "columnCount": 9,
+      "primaryKey": [
+        "symbol"
+      ],
+      "uniqueColumns": [],
+      "foreignKeysOutCount": 0
+    },
+    {
+      "table": "stocks_master",
+      "rowCount": 2285,
+      "columnCount": 27,
+      "primaryKey": [
+        "id"
+      ],
+      "uniqueColumns": [
+        "isin",
+        "symbol"
+      ],
+      "foreignKeysOutCount": 0
+    },
+    {
+      "table": "technical_indicators",
+      "rowCount": 9,
+      "columnCount": 8,
+      "primaryKey": [
+        "symbol",
+        "bucket",
+        "ts"
+      ],
+      "uniqueColumns": [],
+      "foreignKeysOutCount": 0
+    },
+    {
+      "table": "user_push_devices",
+      "rowCount": 8,
+      "columnCount": 9,
+      "primaryKey": [
+        "id"
+      ],
+      "uniqueColumns": [
+        "device_token",
+        "provider"
+      ],
+      "foreignKeysOutCount": 1
+    },
+    {
+      "table": "user_sessions",
+      "rowCount": 48,
+      "columnCount": 8,
+      "primaryKey": [
+        "id"
+      ],
+      "uniqueColumns": [
+        "refresh_token_hash"
+      ],
+      "foreignKeysOutCount": 1
+    },
+    {
+      "table": "users",
+      "rowCount": 36,
+      "columnCount": 12,
+      "primaryKey": [
+        "id"
+      ],
+      "uniqueColumns": [
+        "email"
+      ],
+      "foreignKeysOutCount": 0
+    },
+    {
+      "table": "watchlist_items",
+      "rowCount": 3,
+      "columnCount": 5,
+      "primaryKey": [
+        "id"
+      ],
+      "uniqueColumns": [
+        "symbol",
+        "watchlist_id"
+      ],
+      "foreignKeysOutCount": 1
+    },
+    {
+      "table": "watchlists",
+      "rowCount": 3,
+      "columnCount": 6,
+      "primaryKey": [
+        "id"
+      ],
+      "uniqueColumns": [
+        "name",
+        "user_id"
+      ],
+      "foreignKeysOutCount": 1
+    }
+  ],
+  "repeatedColumns": [
+    {
+      "column": "created_at",
+      "tables": [
+        "auth_audit_logs",
+        "auth_login_attempts",
+        "block_deals",
+        "company_financial_statements",
+        "company_fundamentals",
+        "corporate_actions",
+        "earnings_calendar",
+        "email_verification_tokens",
+        "fear_greed_index_snapshots",
+        "fii_dii_activity",
+        "insider_trades",
+        "ipo_calendar",
+        "ipo_gmp_snapshots",
+        "ipo_subscription_snapshots",
+        "market_snapshots",
+        "mutual_fund_holdings",
+        "news_article_symbols",
+        "news_articles",
+        "notification_deliveries",
+        "oauth_identities",
+        "password_reset_tokens",
+        "portfolio_transactions",
+        "portfolios",
+        "price_alerts",
+        "sector_heatmap_snapshots",
+        "shareholding_patterns",
+        "social_sentiment_snapshots",
+        "stock_metrics_snapshots",
+        "stock_price_ticks",
+        "stock_profile_details",
+        "stock_sector_taxonomy",
+        "stocks_master",
+        "technical_indicators",
+        "user_push_devices",
+        "user_sessions",
+        "users",
+        "watchlist_items",
+        "watchlists"
+      ],
+      "count": 38,
+      "isGeneric": true
+    },
+    {
+      "column": "updated_at",
+      "tables": [
+        "auth_login_attempts",
+        "block_deals",
+        "company_financial_statements",
+        "company_fundamentals",
+        "corporate_actions",
+        "earnings_calendar",
+        "fear_greed_index_snapshots",
+        "fii_dii_activity",
+        "insider_trades",
+        "ipo_calendar",
+        "ipo_gmp_snapshots",
+        "ipo_subscription_snapshots",
+        "market_snapshots",
+        "mutual_fund_holdings",
+        "news_articles",
+        "notification_deliveries",
+        "oauth_identities",
+        "portfolio_transactions",
+        "portfolios",
+        "price_alerts",
+        "sector_heatmap_snapshots",
+        "shareholding_patterns",
+        "social_sentiment_snapshots",
+        "stock_metrics_snapshots",
+        "stock_price_ticks",
+        "stock_profile_details",
+        "stock_sector_taxonomy",
+        "stocks_master",
+        "technical_indicators",
+        "user_push_devices",
+        "users",
+        "watchlists"
+      ],
+      "count": 32,
+      "isGeneric": true
+    },
+    {
+      "column": "id",
+      "tables": [
+        "auth_audit_logs",
+        "block_deals",
+        "corporate_actions",
+        "earnings_calendar",
+        "email_verification_tokens",
+        "fear_greed_index_snapshots",
+        "fii_dii_activity",
+        "insider_trades",
+        "ipo_calendar",
+        "ipo_gmp_snapshots",
+        "ipo_subscription_snapshots",
+        "mutual_fund_holdings",
+        "news_articles",
+        "notification_deliveries",
+        "oauth_identities",
+        "password_reset_tokens",
+        "portfolio_transactions",
+        "portfolios",
+        "price_alerts",
+        "schema_migrations",
+        "shareholding_patterns",
+        "social_sentiment_snapshots",
+        "stocks_master",
+        "user_push_devices",
+        "user_sessions",
+        "users",
+        "watchlist_items",
+        "watchlists"
+      ],
+      "count": 28,
+      "isGeneric": true
+    },
+    {
+      "column": "metadata",
+      "tables": [
+        "auth_audit_logs",
+        "block_deals",
+        "company_financial_statements",
+        "company_fundamentals",
+        "corporate_actions",
+        "earnings_calendar",
+        "fear_greed_index_snapshots",
+        "fii_dii_activity",
+        "insider_trades",
+        "ipo_calendar",
+        "ipo_gmp_snapshots",
+        "ipo_subscription_snapshots",
+        "market_snapshots",
+        "mutual_fund_holdings",
+        "news_articles",
+        "portfolio_transactions",
+        "price_alerts",
+        "sector_heatmap_snapshots",
+        "shareholding_patterns",
+        "social_sentiment_snapshots",
+        "stock_metrics_snapshots",
+        "stock_price_ticks",
+        "stock_profile_details",
+        "stock_sector_taxonomy",
+        "stocks_master",
+        "technical_indicators",
+        "user_push_devices"
+      ],
+      "count": 27,
+      "isGeneric": true
+    },
+    {
+      "column": "source",
+      "tables": [
+        "block_deals",
+        "company_financial_statements",
+        "company_fundamentals",
+        "corporate_actions",
+        "earnings_calendar",
+        "fear_greed_index_snapshots",
+        "fii_dii_activity",
+        "insider_trades",
+        "ipo_calendar",
+        "ipo_gmp_snapshots",
+        "ipo_subscription_snapshots",
+        "market_snapshots",
+        "mutual_fund_holdings",
+        "news_articles",
+        "sector_heatmap_snapshots",
+        "shareholding_patterns",
+        "social_sentiment_snapshots",
+        "stock_metrics_snapshots",
+        "stock_price_ticks",
+        "stock_profile_details",
+        "stock_sector_taxonomy",
+        "stocks_master",
+        "technical_indicators"
+      ],
+      "count": 23,
+      "isGeneric": true
+    },
+    {
+      "column": "symbol",
+      "tables": [
+        "block_deals",
+        "company_financial_statements",
+        "company_fundamentals",
+        "corporate_actions",
+        "earnings_calendar",
+        "insider_trades",
+        "ipo_calendar",
+        "mutual_fund_holdings",
+        "news_article_symbols",
+        "portfolio_transactions",
+        "price_alerts",
+        "shareholding_patterns",
+        "social_sentiment_snapshots",
+        "stock_metrics_snapshots",
+        "stock_price_ticks",
+        "stock_profile_details",
+        "stock_sector_taxonomy",
+        "stocks_master",
+        "technical_indicators",
+        "watchlist_items"
+      ],
+      "count": 20,
+      "isGeneric": true
+    },
+    {
+      "column": "user_id",
+      "tables": [
+        "auth_audit_logs",
+        "email_verification_tokens",
+        "notification_deliveries",
+        "oauth_identities",
+        "password_reset_tokens",
+        "portfolios",
+        "price_alerts",
+        "user_push_devices",
+        "user_sessions",
+        "watchlists"
+      ],
+      "count": 10,
+      "isGeneric": true
+    },
+    {
+      "column": "company_name",
+      "tables": [
+        "block_deals",
+        "corporate_actions",
+        "earnings_calendar",
+        "insider_trades",
+        "ipo_calendar",
+        "mutual_fund_holdings",
+        "shareholding_patterns",
+        "stock_sector_taxonomy",
+        "stocks_master"
+      ],
+      "count": 9,
+      "isGeneric": false
+    },
+    {
+      "column": "is_active",
+      "tables": [
+        "price_alerts",
+        "stocks_master",
+        "user_push_devices",
+        "users"
+      ],
+      "count": 4,
+      "isGeneric": false
+    },
+    {
+      "column": "quantity",
+      "tables": [
+        "block_deals",
+        "insider_trades",
+        "mutual_fund_holdings",
+        "portfolio_transactions"
+      ],
+      "count": 4,
+      "isGeneric": false
+    },
+    {
+      "column": "as_of_date",
+      "tables": [
+        "company_financial_statements",
+        "company_fundamentals",
+        "stock_metrics_snapshots"
+      ],
+      "count": 3,
+      "isGeneric": false
+    },
+    {
+      "column": "description",
+      "tables": [
+        "portfolios",
+        "stocks_master",
+        "watchlists"
+      ],
+      "count": 3,
+      "isGeneric": false
+    },
+    {
+      "column": "exchange",
+      "tables": [
+        "block_deals",
+        "insider_trades",
+        "stocks_master"
+      ],
+      "count": 3,
+      "isGeneric": false
+    },
+    {
+      "column": "expires_at",
+      "tables": [
+        "email_verification_tokens",
+        "password_reset_tokens",
+        "user_sessions"
+      ],
+      "count": 3,
+      "isGeneric": false
+    },
+    {
+      "column": "provider",
+      "tables": [
+        "notification_deliveries",
+        "oauth_identities",
+        "user_push_devices"
+      ],
+      "count": 3,
+      "isGeneric": false
+    },
+    {
+      "column": "sector",
+      "tables": [
+        "sector_heatmap_snapshots",
+        "stock_sector_taxonomy",
+        "stocks_master"
+      ],
+      "count": 3,
+      "isGeneric": false
+    },
+    {
+      "column": "snapshot_date",
+      "tables": [
+        "fear_greed_index_snapshots",
+        "ipo_gmp_snapshots",
+        "ipo_subscription_snapshots"
+      ],
+      "count": 3,
+      "isGeneric": false
+    },
+    {
+      "column": "captured_at",
+      "tables": [
+        "market_snapshots",
+        "sector_heatmap_snapshots"
+      ],
+      "count": 2,
+      "isGeneric": false
+    },
+    {
+      "column": "category",
+      "tables": [
+        "fii_dii_activity",
+        "news_articles"
+      ],
+      "count": 2,
+      "isGeneric": false
+    },
+    {
+      "column": "employees",
+      "tables": [
+        "stock_profile_details",
+        "stocks_master"
+      ],
+      "count": 2,
+      "isGeneric": false
+    },
+    {
+      "column": "founded_year",
+      "tables": [
+        "stock_profile_details",
+        "stocks_master"
+      ],
+      "count": 2,
+      "isGeneric": false
+    },
+    {
+      "column": "headquarters",
+      "tables": [
+        "stock_profile_details",
+        "stocks_master"
+      ],
+      "count": 2,
+      "isGeneric": false
+    },
+    {
+      "column": "industry",
+      "tables": [
+        "stock_sector_taxonomy",
+        "stocks_master"
+      ],
+      "count": 2,
+      "isGeneric": false
+    },
+    {
+      "column": "ip_address",
+      "tables": [
+        "auth_audit_logs",
+        "user_sessions"
+      ],
+      "count": 2,
+      "isGeneric": false
+    },
+    {
+      "column": "ipo_id",
+      "tables": [
+        "ipo_gmp_snapshots",
+        "ipo_subscription_snapshots"
+      ],
+      "count": 2,
+      "isGeneric": false
+    },
+    {
+      "column": "is_sme",
+      "tables": [
+        "ipo_calendar",
+        "stocks_master"
+      ],
+      "count": 2,
+      "isGeneric": false
+    },
+    {
+      "column": "listing_date",
+      "tables": [
+        "ipo_calendar",
+        "stocks_master"
+      ],
+      "count": 2,
+      "isGeneric": false
+    },
+    {
+      "column": "lot_size",
+      "tables": [
+        "ipo_calendar",
+        "stocks_master"
+      ],
+      "count": 2,
+      "isGeneric": false
+    },
+    {
+      "column": "payload",
+      "tables": [
+        "company_financial_statements",
+        "notification_deliveries"
+      ],
+      "count": 2,
+      "isGeneric": false
+    },
+    {
+      "column": "period_end",
+      "tables": [
+        "earnings_calendar",
+        "shareholding_patterns"
+      ],
+      "count": 2,
+      "isGeneric": false
+    },
+    {
+      "column": "platform",
+      "tables": [
+        "social_sentiment_snapshots",
+        "user_push_devices"
+      ],
+      "count": 2,
+      "isGeneric": false
+    },
+    {
+      "column": "sentiment_score",
+      "tables": [
+        "news_articles",
+        "social_sentiment_snapshots"
+      ],
+      "count": 2,
+      "isGeneric": false
+    },
+    {
+      "column": "status",
+      "tables": [
+        "ipo_calendar",
+        "notification_deliveries"
+      ],
+      "count": 2,
+      "isGeneric": false
+    },
+    {
+      "column": "title",
+      "tables": [
+        "corporate_actions",
+        "notification_deliveries"
+      ],
+      "count": 2,
+      "isGeneric": false
+    },
+    {
+      "column": "trade_date",
+      "tables": [
+        "block_deals",
+        "insider_trades"
+      ],
+      "count": 2,
+      "isGeneric": false
+    },
+    {
+      "column": "transaction_type",
+      "tables": [
+        "insider_trades",
+        "portfolio_transactions"
+      ],
+      "count": 2,
+      "isGeneric": false
+    },
+    {
+      "column": "ts",
+      "tables": [
+        "stock_price_ticks",
+        "technical_indicators"
+      ],
+      "count": 2,
+      "isGeneric": false
+    },
+    {
+      "column": "used_at",
+      "tables": [
+        "email_verification_tokens",
+        "password_reset_tokens"
+      ],
+      "count": 2,
+      "isGeneric": false
+    },
+    {
+      "column": "user_agent",
+      "tables": [
+        "auth_audit_logs",
+        "user_sessions"
+      ],
+      "count": 2,
+      "isGeneric": false
+    },
+    {
+      "column": "website",
+      "tables": [
+        "stock_profile_details",
+        "stocks_master"
+      ],
+      "count": 2,
+      "isGeneric": false
+    }
+  ],
+  "potentialDuplicationHotspots": [
+    {
+      "tableA": "block_deals",
+      "tableB": "insider_trades",
+      "sharedNonGenericCount": 4,
+      "sharedNonGenericColumns": [
+        "company_name",
+        "exchange",
+        "quantity",
+        "trade_date"
+      ],
+      "sharedAllCount": 10
+    },
+    {
+      "tableA": "ipo_calendar",
+      "tableB": "stocks_master",
+      "sharedNonGenericCount": 4,
+      "sharedNonGenericColumns": [
+        "company_name",
+        "is_sme",
+        "listing_date",
+        "lot_size"
+      ],
+      "sharedAllCount": 10
+    },
+    {
+      "tableA": "stock_profile_details",
+      "tableB": "stocks_master",
+      "sharedNonGenericCount": 4,
+      "sharedNonGenericColumns": [
+        "employees",
+        "founded_year",
+        "headquarters",
+        "website"
+      ],
+      "sharedAllCount": 9
+    },
+    {
+      "tableA": "stock_sector_taxonomy",
+      "tableB": "stocks_master",
+      "sharedNonGenericCount": 3,
+      "sharedNonGenericColumns": [
+        "company_name",
+        "industry",
+        "sector"
+      ],
+      "sharedAllCount": 8
+    },
+    {
+      "tableA": "auth_audit_logs",
+      "tableB": "user_sessions",
+      "sharedNonGenericCount": 2,
+      "sharedNonGenericColumns": [
+        "ip_address",
+        "user_agent"
+      ],
+      "sharedAllCount": 5
+    },
+    {
+      "tableA": "block_deals",
+      "tableB": "mutual_fund_holdings",
+      "sharedNonGenericCount": 2,
+      "sharedNonGenericColumns": [
+        "company_name",
+        "quantity"
+      ],
+      "sharedAllCount": 8
+    },
+    {
+      "tableA": "block_deals",
+      "tableB": "stocks_master",
+      "sharedNonGenericCount": 2,
+      "sharedNonGenericColumns": [
+        "company_name",
+        "exchange"
+      ],
+      "sharedAllCount": 8
+    },
+    {
+      "tableA": "earnings_calendar",
+      "tableB": "shareholding_patterns",
+      "sharedNonGenericCount": 2,
+      "sharedNonGenericColumns": [
+        "company_name",
+        "period_end"
+      ],
+      "sharedAllCount": 8
+    },
+    {
+      "tableA": "email_verification_tokens",
+      "tableB": "password_reset_tokens",
+      "sharedNonGenericCount": 2,
+      "sharedNonGenericColumns": [
+        "expires_at",
+        "used_at"
+      ],
+      "sharedAllCount": 5
+    },
+    {
+      "tableA": "insider_trades",
+      "tableB": "mutual_fund_holdings",
+      "sharedNonGenericCount": 2,
+      "sharedNonGenericColumns": [
+        "company_name",
+        "quantity"
+      ],
+      "sharedAllCount": 8
+    },
+    {
+      "tableA": "insider_trades",
+      "tableB": "portfolio_transactions",
+      "sharedNonGenericCount": 2,
+      "sharedNonGenericColumns": [
+        "quantity",
+        "transaction_type"
+      ],
+      "sharedAllCount": 7
+    },
+    {
+      "tableA": "insider_trades",
+      "tableB": "stocks_master",
+      "sharedNonGenericCount": 2,
+      "sharedNonGenericColumns": [
+        "company_name",
+        "exchange"
+      ],
+      "sharedAllCount": 8
+    },
+    {
+      "tableA": "ipo_gmp_snapshots",
+      "tableB": "ipo_subscription_snapshots",
+      "sharedNonGenericCount": 2,
+      "sharedNonGenericColumns": [
+        "ipo_id",
+        "snapshot_date"
+      ],
+      "sharedAllCount": 7
+    }
+  ]
+}
