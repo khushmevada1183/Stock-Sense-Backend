@@ -16,6 +16,8 @@ const {
 } = require('./fundamentals.validation');
 
 const FUNDAMENTALS_CACHE_TAG = 'stock-fundamentals';
+const CACHE_ENABLED = String(process.env.CACHE_ENABLED || 'true').toLowerCase() !== 'false';
+const FUNDAMENTALS_CACHE_TTL_MS = 60 * 1000;
 
 const CACHE_KEYS = {
   fundamentals: (symbol, query) =>
@@ -134,14 +136,14 @@ const buildComputedRatios = (rawProfile, rawRatios) => {
 };
 
 const cacheSet = async (key, data, tags = []) => {
-  if (!cacheManager.isEnabled()) {
+  if (!CACHE_ENABLED) {
     return;
   }
 
   try {
-    await cacheManager.set(key, data, {
-      ttl: 60,
+    await cacheManager.setAsync(key, data, FUNDAMENTALS_CACHE_TTL_MS, {
       tags,
+      priority: 'normal',
     });
   } catch (error) {
     logger.warn('Failed to cache fundamentals payload', {
@@ -152,12 +154,12 @@ const cacheSet = async (key, data, tags = []) => {
 };
 
 const cacheGet = async (key) => {
-  if (!cacheManager.isEnabled()) {
+  if (!CACHE_ENABLED) {
     return null;
   }
 
   try {
-    const cached = await cacheManager.get(key);
+    const cached = await cacheManager.getAsync(key);
     return cached || null;
   } catch (error) {
     logger.warn('Failed to read fundamentals cache', {
@@ -169,12 +171,12 @@ const cacheGet = async (key) => {
 };
 
 const clearSymbolCache = async (symbol) => {
-  if (!cacheManager.isEnabled()) {
+  if (!CACHE_ENABLED) {
     return;
   }
 
   try {
-    await cacheManager.invalidateByTags([
+    await cacheManager.clearByTagsAsync([
       FUNDAMENTALS_CACHE_TAG,
       `${FUNDAMENTALS_CACHE_TAG}:${symbol}`,
     ]);

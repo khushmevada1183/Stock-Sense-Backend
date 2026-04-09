@@ -20,7 +20,7 @@
  * 
  * DATA SOURCE:
  *   Primary:   stock-nse-india package (npm install stock-nse-india)
- *   Fallback:  Mock data for unavailable endpoints
+ *   Fallback:  Disabled at backend (no mock responses)
  * 
  * ENDPOINT MAPPING:
  *   /stock                 ↔ getEquityDetails()
@@ -30,9 +30,9 @@
  *   /corporate_info        ↔ getEquityCorporateInfo()
  *   /trade_info            ↔ getEquityTradeInfo()
  *   /trending              ↔ getEquityStockIndices()
- *   /price_shockers        ↔ getGainersAndLosersByIndex()
+ *   /price_shockers        ↔ getPreOpenMarketData() (derived gainers/losers)
  *   /NSE_most_active       ↔ getMostActiveEquities()
- *   /ipo, /commodities     ↔ Falls back to mock data
+ *   /ipo                   ↔ Not supported by stock-nse-india (throws)
  * ============================================================================
  */
 
@@ -44,7 +44,6 @@ if (typeof require !== 'undefined') {
 
 // Use conditional imports for frontend/backend compatibility
 const axios = (typeof require !== 'undefined') ? require('axios') : window.axios;
-const { getMockData } = require('../../utils/mockData');
 const cacheManager = require('../../utils/cacheManager');
 const { logger } = require('../../utils/liveLogger');
 
@@ -185,27 +184,39 @@ const CACHE_STRATEGY = {
 };
 
 /**
- * Wrapper for safe NseIndia calls with fallback to mock data
+ * Wrapper for safe NseIndia calls. No mock fallback is allowed on backend.
  */
 async function callNSEIndia(methodName, ...args) {
   if (!nseIndiaInstance) {
-    logger.warn(`⚠️  NseIndia not available, falling back to mock data for ${methodName}`);
-    return null;
+    const error = new Error(`NseIndia is not initialized for ${methodName}`);
+    error.code = 'ERR_NSE_UNAVAILABLE';
+    throw error;
   }
 
   try {
     if (typeof nseIndiaInstance[methodName] === 'function') {
       const result = await nseIndiaInstance[methodName](...args);
       return result;
-    } else {
-      logger.warn(`Method ${methodName} not found on NseIndia instance`);
-      return null;
     }
+
+    const error = new Error(`Method ${methodName} not found on NseIndia instance`);
+    error.code = 'ERR_NSE_METHOD_UNAVAILABLE';
+    throw error;
   } catch (err) {
-    console.error(`NseIndia ${methodName} error:`, err.message);
-    return null;
+    logger.warn(`NseIndia ${methodName} error: ${err.message}`);
+    throw err;
   }
 }
+
+const buildDataUnavailableError = (endpoint, message, cause) => {
+  const error = new Error(`[${endpoint}] ${message}`);
+  error.code = 'ERR_UPSTREAM_DATA_UNAVAILABLE';
+  error.endpoint = endpoint;
+  if (cause) {
+    error.cause = cause;
+  }
+  return error;
+};
 
 // API Key Manager (DEPRECATED - kept for backward compatibility)
 class ApiKeyManager {
@@ -421,6 +432,15 @@ async function getData(endpoint, params = {}, options = {}) {
   // STEP 3: FETCH FRESH DATA
   // =============================
   const endpointMap = {
+    '/health': async () => {
+      return {
+        status: 'ok',
+        source: 'backend',
+        provider: 'stock-nse-india',
+        nseInitialized: Boolean(nseIndiaInstance),
+        timestamp: new Date().toISOString(),
+      };
+    },
     '/stock': async () => {
       const symbol = params.name || params.symbol;
       if (!symbol) return null;
@@ -465,65 +485,182 @@ async function getData(endpoint, params = {}, options = {}) {
       return await callNSEIndia('getEquityStockIndices');
     },
     '/price_shockers': async () => {
-      return await callNSEIndia('getGainersAndLosersByIndex', params.index || 'NIFTY 50');
+      const index = params.index || 'NIFTY 50';
+      const payload = await callNSEIndia('getPreOpenMarketData', index);
+      const rows = Array.isArray(payload?.data)
+        ? payload.data
+            .map((entry) => {
+              const metadata = entry?.metadata || {};
+              const symbol = String(metadata.symbol || '').trim().toUpperCase();
+              const pChange = Number(metadata.pChange);
+              const lastPrice = Number(metadata.lastPrice);
+
+              if (!symbol || !Number.isFinite(pChange) || !Number.isFinite(lastPrice)) {
+                return null;
+              }
+
+              return {
+                symbol,
+                pChange,
+                change_percent: pChange,
+                lastPrice,
+                last_price: lastPrice,
+              };
+            })
+            .filter(Boolean)
+        : [];
+
+      if (rows.length === 0) {
+        throw buildDataUnavailableError(
+          '/price_shockers',
+          `No usable rows returned for index ${index}`
+        );
+      }
+
+      const gainers = [...rows]
+        .filter((row) => row.pChange > 0)
+        .sort((a, b) => b.pChange - a.pChange)
+        .slice(0, 50);
+      const losers = [...rows]
+        .filter((row) => row.pChange < 0)
+        .sort((a, b) => a.pChange - b.pChange)
+        .slice(0, 50);
+
+      return {
+        index,
+        source: 'stock-nse-india',
+        capturedAt: new Date().toISOString(),
+        gainers,
+        losers,
+      };
     },
     '/NSE_most_active': async () => {
       return await callNSEIndia('getMostActiveEquities');
     },
     '/BSE_most_active': async () => {
-      // BSE data not directly available in stock-nse-india, fall back to mock
-      return null;
+      throw buildDataUnavailableError(
+        '/BSE_most_active',
+        'BSE most-active feed is not available from stock-nse-india'
+      );
     },
     '/ipo': async () => {
-      // IPO data not available in stock-nse-india, fall back to mock
-      return null;
+      throw buildDataUnavailableError('/ipo', 'IPO feed is not available from stock-nse-india');
     },
     '/commodities': async () => {
       const symbol = params.symbol;
       if (!symbol) return null;
       return await callNSEIndia('getCommodityOptionChain', symbol);
+    },
+    '/fetch_52_week_high_low_data': async () => {
+      const parsedLimit = Number.parseInt(params.limit, 10);
+      const limit = Number.isFinite(parsedLimit)
+        ? Math.max(1, Math.min(parsedLimit, 100))
+        : 50;
+
+      const fallbackSymbols = [
+        'RELIANCE',
+        'TCS',
+        'HDFCBANK',
+        'ICICIBANK',
+        'INFY',
+        'SBIN',
+        'LT',
+        'ITC',
+        'AXISBANK',
+        'BHARTIARTL',
+      ];
+
+      const priceShockers = await getData(
+        '/price_shockers',
+        { index: params.index || 'NIFTY 50' },
+        { forceFresh: true, skipCache: true }
+      );
+
+      const gainers = Array.isArray(priceShockers?.gainers) ? priceShockers.gainers : [];
+      const losers = Array.isArray(priceShockers?.losers) ? priceShockers.losers : [];
+
+      const symbols = Array.from(
+        new Set(
+          [...gainers, ...losers]
+            .map((item) => String(item?.symbol || item?.stock_name || item?.ticker || '').trim().toUpperCase())
+            .filter((symbol) => /^[A-Z0-9.&_-]{1,20}$/.test(symbol))
+        )
+      );
+
+      const candidates = (symbols.length > 0 ? symbols : fallbackSymbols).slice(0, limit);
+
+      const details = await Promise.allSettled(
+        candidates.map((symbol) => callNSEIndia('getEquityDetails', symbol))
+      );
+
+      const rows = details
+        .map((result, index) => {
+          if (result.status !== 'fulfilled' || !result.value) {
+            return null;
+          }
+
+          const payload = result.value;
+          const weekHighLow = payload?.priceInfo?.weekHighLow;
+          if (!weekHighLow) {
+            return null;
+          }
+
+          return {
+            symbol: payload?.info?.symbol || candidates[index],
+            companyName: payload?.info?.companyName || null,
+            sector: payload?.industryInfo?.sector || payload?.industryInfo?.macro || 'UNKNOWN',
+            industry: payload?.industryInfo?.industry || payload?.info?.industry || 'UNKNOWN',
+            marketCap: payload?.securityInfo?.issuedSize || null,
+            week52High: weekHighLow?.max ?? null,
+            week52Low: weekHighLow?.min ?? null,
+            highDate: weekHighLow?.maxDate || null,
+            lowDate: weekHighLow?.minDate || null,
+            currentPrice: payload?.priceInfo?.lastPrice ?? null,
+            source: 'stock-nse-india',
+          };
+        })
+        .filter(Boolean);
+
+      return rows.length > 0
+        ? {
+            source: 'stock-nse-india',
+            generatedAt: new Date().toISOString(),
+            items: rows,
+          }
+        : null;
     }
   };
 
   // Try to get data from NseIndia first
   const handler = endpointMap[endpoint];
-  let result = null;
+  let result;
   
-  if (handler) {
-    try {
-      result = await handler();
-      if (result) {
-        // =============================
-        // STEP 4: STORE IN CACHE
-        // =============================
-        if (shouldAttemptCache && cacheKey && strategy.ttl > 0) {
-          cacheManager.set(cacheKey, result, strategy.ttl, { 
-            tags: ['nse-data', endpoint.replace('/', '')],
-            priority: 'normal'
-          });
-          console.log(`📦 Cached data for ${endpoint} (TTL: ${strategy.ttl / 60000} minutes)`);
-        }
-        return result;
-      }
-    } catch (err) {
-      logger.warn(`Error calling NseIndia for ${endpoint}:`, err.message);
-    }
+  if (!handler) {
+    throw buildDataUnavailableError(endpoint, 'No upstream mapping is configured for this endpoint');
   }
 
-  // Fallback to mock data
-  console.log(`⏸️  Using mock data for endpoint: ${endpoint}`);
-  const mockResult = getMockData(endpoint, params);
-  
-  // Store mock data in cache too (but with shorter TTL for safety)
-  if (shouldAttemptCache && cacheKey && strategy.cacheable) {
-    const mockCacheTtl = 2 * 60 * 1000; // 2-minute cache for mock data
-    cacheManager.set(cacheKey, mockResult, mockCacheTtl, { 
-      tags: ['mock-data', endpoint.replace('/', '')],
-      priority: 'low'
-    });
+  try {
+    result = await handler();
+  } catch (err) {
+    throw buildDataUnavailableError(endpoint, err.message, err);
   }
-  
-  return mockResult;
+
+  if (result === undefined || result === null) {
+    throw buildDataUnavailableError(endpoint, 'Upstream returned empty payload');
+  }
+
+  // =============================
+  // STEP 4: STORE IN CACHE
+  // =============================
+  if (shouldAttemptCache && cacheKey && strategy.ttl > 0) {
+    cacheManager.set(cacheKey, result, strategy.ttl, {
+      tags: ['nse-data', endpoint.replace('/', '')],
+      priority: 'normal'
+    });
+    console.log(`📦 Cached data for ${endpoint} (TTL: ${strategy.ttl / 60000} minutes)`);
+  }
+
+  return result;
 }
 
 // ============================================================================

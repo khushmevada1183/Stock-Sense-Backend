@@ -26,6 +26,25 @@ const toPositiveInt = (value, fallback) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };
 
+const toFiniteNumber = (value) => {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.replace(/[\s,%₹]/g, '');
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
 const CACHE_ENABLED = String(process.env.CACHE_ENABLED || 'true').toLowerCase() !== 'false';
 const CACHE_MARKET_LATEST_TTL_MS = toPositiveInt(process.env.CACHE_MARKET_LATEST_TTL_MS, 30 * 1000);
 const CACHE_MARKET_HISTORY_TTL_MS = toPositiveInt(process.env.CACHE_MARKET_HISTORY_TTL_MS, 30 * 1000);
