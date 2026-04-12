@@ -49,7 +49,6 @@ const buildSuccessResponse = (dataOrOptions = null, options = {}) => {
   const metadata = buildResponseMeta(buildOptions);
   if (hasKeys(metadata)) {
     payload.meta = metadata;
-    payload.metadata = metadata;
   }
 
   return payload;
