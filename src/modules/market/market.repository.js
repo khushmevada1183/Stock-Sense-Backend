@@ -84,7 +84,7 @@ const getLatestMarketSnapshot = async () => {
   return result.rows[0] || null;
 };
 
-const listMarketSnapshots = async ({ from = null, to = null, limit = 60 }) => {
+const listMarketSnapshots = async ({ from = null, to = null, limit = 60, offset = 0 }) => {
   const result = await query(
     `
       SELECT
@@ -102,16 +102,32 @@ const listMarketSnapshots = async ({ from = null, to = null, limit = 60 }) => {
       WHERE ($1::timestamptz IS NULL OR captured_minute >= $1::timestamptz)
         AND ($2::timestamptz IS NULL OR captured_minute <= $2::timestamptz)
       ORDER BY captured_minute DESC
-      LIMIT $3;
+      LIMIT $3
+      OFFSET $4;
     `,
-    [from, to, limit]
+    [from, to, limit, offset]
   );
 
   return result.rows;
+};
+
+const countMarketSnapshots = async ({ from = null, to = null } = {}) => {
+  const result = await query(
+    `
+      SELECT COUNT(*)::int AS total
+      FROM market_snapshots
+      WHERE ($1::timestamptz IS NULL OR captured_minute >= $1::timestamptz)
+        AND ($2::timestamptz IS NULL OR captured_minute <= $2::timestamptz);
+    `,
+    [from, to]
+  );
+
+  return result.rows[0]?.total || 0;
 };
 
 module.exports = {
   upsertMarketSnapshot,
   getLatestMarketSnapshot,
   listMarketSnapshots,
+  countMarketSnapshots,
 };

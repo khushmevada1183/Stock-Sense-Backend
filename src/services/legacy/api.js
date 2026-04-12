@@ -31,7 +31,7 @@
  *   /trade_info            ↔ getEquityTradeInfo()
  *   /trending              ↔ getEquityStockIndices()
  *   /price_shockers        ↔ getPreOpenMarketData() (derived gainers/losers)
- *   /NSE_most_active       ↔ getMostActiveEquities()
+ *   /NSE_most_active       ↔ getPreOpenMarketData() (derived most-active list)
  *   /ipo                   ↔ Not supported by stock-nse-india (throws)
  * ============================================================================
  */
@@ -535,7 +535,72 @@ async function getData(endpoint, params = {}, options = {}) {
       };
     },
     '/NSE_most_active': async () => {
-      return await callNSEIndia('getMostActiveEquities');
+      const index = params.index || 'NIFTY 50';
+      const parsedLimit = Number.parseInt(params.limit, 10);
+      const limit = Number.isFinite(parsedLimit)
+        ? Math.max(1, Math.min(parsedLimit, 100))
+        : 50;
+
+      const payload = await callNSEIndia('getPreOpenMarketData', index);
+      const rows = Array.isArray(payload?.data)
+        ? payload.data
+            .map((entry) => {
+              const metadata = entry?.metadata || {};
+              const symbol = String(metadata.symbol || '').trim().toUpperCase();
+              if (!symbol) {
+                return null;
+              }
+
+              const totalTurnover = Number(metadata.totalTurnover);
+              const finalQuantity = Number(metadata.finalQuantity);
+              const lastPrice = Number(metadata.lastPrice);
+              const change = Number(metadata.change);
+              const pChange = Number(metadata.pChange);
+
+              return {
+                symbol,
+                identifier: metadata.identifier || null,
+                series: metadata.series || null,
+                purpose: metadata.purpose || null,
+                lastPrice: Number.isFinite(lastPrice) ? lastPrice : null,
+                change: Number.isFinite(change) ? change : null,
+                pChange: Number.isFinite(pChange) ? pChange : null,
+                previousClose: Number.isFinite(Number(metadata.previousClose)) ? Number(metadata.previousClose) : null,
+                finalQuantity: Number.isFinite(finalQuantity) ? finalQuantity : null,
+                totalTurnover: Number.isFinite(totalTurnover) ? totalTurnover : null,
+                marketCap: metadata.marketCap ?? null,
+                yearHigh: Number.isFinite(Number(metadata.yearHigh)) ? Number(metadata.yearHigh) : null,
+                yearLow: Number.isFinite(Number(metadata.yearLow)) ? Number(metadata.yearLow) : null,
+                iep: Number.isFinite(Number(metadata.iep)) ? Number(metadata.iep) : null,
+              };
+            })
+            .filter(Boolean)
+        : [];
+
+      if (rows.length === 0) {
+        throw buildDataUnavailableError(
+          '/NSE_most_active',
+          `No usable rows returned for index ${index}`
+        );
+      }
+
+      const stocks = [...rows]
+        .sort((a, b) => {
+          const turnoverDelta = (b.totalTurnover || 0) - (a.totalTurnover || 0);
+          if (turnoverDelta !== 0) {
+            return turnoverDelta;
+          }
+          return (b.finalQuantity || 0) - (a.finalQuantity || 0);
+        })
+        .slice(0, limit);
+
+      return {
+        index,
+        source: 'stock-nse-india',
+        capturedAt: new Date().toISOString(),
+        count: stocks.length,
+        stocks,
+      };
     },
     '/BSE_most_active': async () => {
       throw buildDataUnavailableError(
