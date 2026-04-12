@@ -894,10 +894,7 @@ async function getHistoricalPrices(symbol, range = '1m', filter = 'default') {
  * @returns {Promise<Object>} - Financial ratios
  */
 async function getFinancialRatios(symbol) {
-  return getData('/historical_stats', { 
-    stock_name: symbol, 
-    stats: 'ratios' 
-  });
+  return getCompanyProfile(symbol);
 }
 
 /**
