@@ -363,15 +363,7 @@ function startServer() {
 if (require.main === module) {
   startServer();
 }
-  return httpServer;
-}
-
-// Start server
-if (require.main === module) {
-  startServer();
-}
 
 // Export for testing
 module.exports = app; 
-module.exports.startServer = startServer;
 module.exports.startServer = startServer;
