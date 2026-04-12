@@ -209,15 +209,20 @@ async function shutdown(signal) {
   }
 }
 
-// Start server
-if (require.main === module) {
+let httpServer = null;
+
+function startServer() {
+  if (httpServer) {
+    return httpServer;
+  }
+
   ['SIGINT', 'SIGTERM'].forEach((signal) => {
     process.on(signal, () => {
       shutdown(signal);
     });
   });
 
-  const httpServer = app.listen(PORT, () => {
+  httpServer = app.listen(PORT, () => {
     logger.info('Indian Stock API Server started', {
       port: PORT,
       apiBaseUrl: API_CONFIG.BASE_URL,
@@ -350,7 +355,15 @@ if (require.main === module) {
       setTimeout(keepAlive, 30000);
     }
   });
+
+  return httpServer;
+}
+
+// Start server
+if (require.main === module) {
+  startServer();
 }
 
 // Export for testing
 module.exports = app; 
+module.exports.startServer = startServer;
