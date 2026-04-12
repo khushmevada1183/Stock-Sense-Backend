@@ -29,10 +29,10 @@
  *   /option_chain          ↔ getEquityOptionChain()
  *   /corporate_info        ↔ getEquityCorporateInfo()
  *   /trade_info            ↔ getEquityTradeInfo()
- *   /trending              ↔ getEquityStockIndices()
+ *   /trending              ↔ getAllIndices() (normalized list)
  *   /price_shockers        ↔ getPreOpenMarketData() (derived gainers/losers)
  *   /NSE_most_active       ↔ getPreOpenMarketData() (derived most-active list)
- *   /ipo                   ↔ Not supported by stock-nse-india (throws)
+ *   /ipo                   ↔ IPO module calendar data
  * ============================================================================
  */
 
@@ -216,6 +216,20 @@ const buildDataUnavailableError = (endpoint, message, cause) => {
     error.cause = cause;
   }
   return error;
+};
+
+const isLikelyIndexName = (value) => {
+  const normalized = String(value || '').trim().toUpperCase();
+  if (!normalized) {
+    return false;
+  }
+
+  return (
+    normalized.includes('NIFTY') ||
+    normalized.includes('SENSEX') ||
+    normalized.includes('VIX') ||
+    normalized.includes('INDEX')
+  );
 };
 
 // API Key Manager (DEPRECATED - kept for backward compatibility)
@@ -449,6 +463,7 @@ async function getData(endpoint, params = {}, options = {}) {
     '/historical_data': async () => {
       const symbol = params.stock_name || params.symbol;
       if (!symbol) return null;
+      const normalizedSymbol = String(symbol).trim().toUpperCase();
       const range = params.period || '1m';
       // Parse date range
       const endDate = new Date();
@@ -458,8 +473,46 @@ async function getData(endpoint, params = {}, options = {}) {
       const rangeMap = { '1m': 30, '6m': 180, '1yr': 365, '3yr': 1095, '5yr': 1825 };
       const days = rangeMap[range] || 30;
       startDate.setDate(startDate.getDate() - days);
-      
-      return await callNSEIndia('getEquityHistoricalData', symbol, { start: startDate, end: endDate });
+
+      const toIndexCandles = (payload) => {
+        const points = Array.isArray(payload?.grapthData) ? payload.grapthData : [];
+        return points
+          .map((point) => {
+            const ts = Number(point?.[0]);
+            const close = Number(point?.[1]);
+            const change = Number(point?.[3]);
+            const changePercent = Number(point?.[4]);
+
+            if (!Number.isFinite(ts) || !Number.isFinite(close)) {
+              return null;
+            }
+
+            return {
+              timestamp: new Date(ts).toISOString(),
+              close,
+              change: Number.isFinite(change) ? change : null,
+              changePercent: Number.isFinite(changePercent) ? changePercent : null,
+            };
+          })
+          .filter(Boolean);
+      };
+
+      if (isLikelyIndexName(normalizedSymbol)) {
+        const intraday = await callNSEIndia('getIndexIntradayData', normalizedSymbol);
+        return toIndexCandles(intraday);
+      }
+
+      try {
+        return await callNSEIndia('getEquityHistoricalData', normalizedSymbol, { start: startDate, end: endDate });
+      } catch (error) {
+        const message = String(error?.message || '');
+        if (/activeSeries|toUpperCase/i.test(message)) {
+          const intraday = await callNSEIndia('getIndexIntradayData', normalizedSymbol);
+          return toIndexCandles(intraday);
+        }
+
+        throw error;
+      }
     },
     '/intraday_data': async () => {
       const symbol = params.stock_name || params.symbol;
@@ -482,7 +535,88 @@ async function getData(endpoint, params = {}, options = {}) {
       return await callNSEIndia('getEquityTradeInfo', symbol);
     },
     '/trending': async () => {
-      return await callNSEIndia('getEquityStockIndices');
+      const payload = await callNSEIndia('getAllIndices');
+      const rows = Array.isArray(payload?.data) ? payload.data : [];
+
+      return rows.map((row) => ({
+        index: row?.index || row?.indexSymbol || null,
+        indexSymbol: row?.indexSymbol || row?.index || null,
+        last: Number.isFinite(Number(row?.last)) ? Number(row.last) : null,
+        variation: Number.isFinite(Number(row?.variation)) ? Number(row.variation) : null,
+        percentChange: Number.isFinite(Number(row?.percentChange)) ? Number(row.percentChange) : null,
+        open: Number.isFinite(Number(row?.open)) ? Number(row.open) : null,
+        high: Number.isFinite(Number(row?.high)) ? Number(row.high) : null,
+        low: Number.isFinite(Number(row?.low)) ? Number(row.low) : null,
+        previousClose: Number.isFinite(Number(row?.previousClose)) ? Number(row.previousClose) : null,
+        advances: Number.isFinite(Number(row?.advances)) ? Number(row.advances) : null,
+        declines: Number.isFinite(Number(row?.declines)) ? Number(row.declines) : null,
+      }));
+    },
+    '/news': async () => {
+      const { normalizeNewsFeedQuery } = require('../../modules/news/news.validation');
+      const { getNewsFeed } = require('../../modules/news/news.service');
+
+      const query = normalizeNewsFeedQuery(params || {});
+      const feed = await getNewsFeed(query);
+
+      return {
+        source: 'news-module',
+        news: Array.isArray(feed?.articles) ? feed.articles : [],
+        count: Number.isFinite(Number(feed?.count)) ? Number(feed.count) : 0,
+        pagination: feed?.pagination || null,
+      };
+    },
+    '/statement': async () => {
+      const symbol = String(params.stock_name || params.symbol || '').trim().toUpperCase() || null;
+      const statementType = String(params.stats || params.statementType || 'yoy_results').trim().toLowerCase();
+
+      return {
+        symbol,
+        statementType,
+        source: 'stock-nse-india',
+        supported: false,
+        rows: [],
+      };
+    },
+    '/stock_forecasts': async () => {
+      return {
+        stockId: String(params.stock_id || '').trim() || null,
+        measureCode: String(params.measure_code || '').trim() || null,
+        periodType: String(params.period_type || '').trim() || null,
+        dataType: String(params.data_type || '').trim() || null,
+        age: String(params.age || '').trim() || null,
+        source: 'stock-nse-india',
+        supported: false,
+        forecasts: [],
+      };
+    },
+    '/mutual_funds': async () => {
+      return {
+        source: 'stock-nse-india',
+        supported: false,
+        funds: [],
+      };
+    },
+    '/industry_search': async () => {
+      return {
+        source: 'stock-nse-india',
+        query: String(params.query || '').trim() || null,
+        rows: [],
+      };
+    },
+    '/corporate_actions': async () => {
+      return {
+        source: 'stock-nse-india',
+        supported: false,
+        actions: [],
+      };
+    },
+    '/recent_announcements': async () => {
+      return {
+        source: 'stock-nse-india',
+        supported: false,
+        announcements: [],
+      };
     },
     '/price_shockers': async () => {
       const index = params.index || 'NIFTY 50';
@@ -603,18 +737,57 @@ async function getData(endpoint, params = {}, options = {}) {
       };
     },
     '/BSE_most_active': async () => {
-      throw buildDataUnavailableError(
-        '/BSE_most_active',
-        'BSE most-active feed is not available from stock-nse-india'
-      );
+      return {
+        exchange: 'BSE',
+        source: 'stock-nse-india',
+        supported: false,
+        count: 0,
+        stocks: [],
+      };
     },
     '/ipo': async () => {
-      throw buildDataUnavailableError('/ipo', 'IPO feed is not available from stock-nse-india');
+      const { normalizeIpoCalendarQuery } = require('../../modules/ipo/ipo.validation');
+      const { listIpoCalendar } = require('../../modules/ipo/ipo.service');
+
+      const calendar = await listIpoCalendar(
+        normalizeIpoCalendarQuery({
+          ...params,
+          grouped: params.grouped ?? true,
+          limit: params.limit || 100,
+        })
+      );
+
+      if (calendar?.grouped) {
+        return {
+          source: 'ipo-module',
+          upcoming: Array.isArray(calendar.upcoming) ? calendar.upcoming : [],
+          active: Array.isArray(calendar.active) ? calendar.active : [],
+          listed: Array.isArray(calendar.listed) ? calendar.listed : [],
+          closed: Array.isArray(calendar.closed) ? calendar.closed : [],
+          total: Number.isFinite(Number(calendar.total)) ? Number(calendar.total) : 0,
+        };
+      }
+
+      return calendar;
     },
     '/commodities': async () => {
-      const symbol = params.symbol;
-      if (!symbol) return null;
-      return await callNSEIndia('getCommodityOptionChain', symbol);
+      const symbol = String(params.symbol || '').trim();
+      if (!symbol) {
+        return {
+          source: 'stock-nse-india',
+          count: 0,
+          items: [],
+          availableSymbols: ['GOLD', 'SILVER', 'CRUDEOIL'],
+        };
+      }
+
+      const payload = await callNSEIndia('getCommodityOptionChain', symbol);
+      return payload || {
+        source: 'stock-nse-india',
+        symbol: symbol.toUpperCase(),
+        count: 0,
+        items: [],
+      };
     },
     '/fetch_52_week_high_low_data': async () => {
       const parsedLimit = Number.parseInt(params.limit, 10);
