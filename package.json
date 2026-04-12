@@ -82,7 +82,7 @@
     "news:sentiment:smoke": "node tests/smoke/news-sentiment-smoke-test.js",
     "notifications:smoke": "node tests/smoke/notification-delivery-smoke-test.js",
     "build": "echo 'No build step needed for backend'",
-    "test": "node --test tests/**/*.test.js"
+    "test": "node --test tests/*.test.js"
   },
   "dependencies": {
     "@socket.io/redis-adapter": "^8.3.0",
