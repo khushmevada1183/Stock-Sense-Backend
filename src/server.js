@@ -94,7 +94,7 @@ app.use(helmet()); // Security headers
 const corsOptions = {
   origin: '*',
   optionsSuccessStatus: 200,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key']
 };
 app.use(cors(corsOptions)); // Enable CORS with * origin
