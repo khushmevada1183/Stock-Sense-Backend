@@ -11,6 +11,7 @@
     "db:migrate": "node src/db/migrate.js",
     "db:snapshot": "node scripts/create-db-backup-snapshot.js",
     "db:migrate:repair": "node scripts/repair-migration-checksums.js",
+    "db:pgstat:report": "node scripts/report-pg-stat-statements.js",
     "db:migrate:flyway": "node scripts/flyway.js migrate",
     "db:validate:flyway": "node scripts/flyway.js validate",
     "db:info:flyway": "node scripts/flyway.js info",

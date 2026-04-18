@@ -24,6 +24,9 @@ pids
 # Generated Flyway staging directory
 .flyway/
 
+# Local DB backup snapshots (can be hundreds of MB)
+docs/refactor/backups/
+
 # Coverage directory used by tools like istanbul
 coverage/
 

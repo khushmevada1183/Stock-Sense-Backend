@@ -1,0 +1,157 @@
+{
+  "generated_at": "2026-04-18T19:14:37.844Z",
+  "database": "neondb",
+  "schema_sizes": [
+    {
+      "schema_name": "_timescaledb_internal",
+      "total_bytes": "298614784",
+      "total_pretty": "285 MB"
+    },
+    {
+      "schema_name": "public",
+      "total_bytes": "233799680",
+      "total_pretty": "223 MB"
+    },
+    {
+      "schema_name": "_timescaledb_catalog",
+      "total_bytes": "1802240",
+      "total_pretty": "1760 kB"
+    },
+    {
+      "schema_name": "_timescaledb_config",
+      "total_bytes": "81920",
+      "total_pretty": "80 kB"
+    },
+    {
+      "schema_name": "_timescaledb_cache",
+      "total_bytes": "0",
+      "total_pretty": "0 bytes"
+    },
+    {
+      "schema_name": "_timescaledb_functions",
+      "total_bytes": "0",
+      "total_pretty": "0 bytes"
+    },
+    {
+      "schema_name": "pg_temp_7",
+      "total_bytes": "0",
+      "total_pretty": "0 bytes"
+    },
+    {
+      "schema_name": "timescaledb_experimental",
+      "total_bytes": "0",
+      "total_pretty": "0 bytes"
+    },
+    {
+      "schema_name": "timescaledb_information",
+      "total_bytes": "0",
+      "total_pretty": "0 bytes"
+    }
+  ],
+  "tables_per_schema": {
+    "public": 39,
+    "_timescaledb_internal": 162,
+    "_timescaledb_catalog": 25,
+    "_timescaledb_config": 1,
+    "_timescaledb_cache": 3
+  },
+  "top_20_tables": [
+    {
+      "rank": 1,
+      "table": "public.market_snapshots"
+    },
+    {
+      "rank": 2,
+      "table": "_timescaledb_internal._hyper_1_6_chunk"
+    },
+    {
+      "rank": 3,
+      "table": "_timescaledb_internal._hyper_1_159_chunk"
+    },
+    {
+      "rank": 4,
+      "table": "_timescaledb_internal._hyper_1_3_chunk"
+    },
+    {
+      "rank": 5,
+      "table": "_timescaledb_internal._hyper_1_4_chunk"
+    },
+    {
+      "rank": 6,
+      "table": "public.news_articles"
+    },
+    {
+      "rank": 7,
+      "table": "_timescaledb_internal._hyper_1_1_chunk"
+    },
+    {
+      "rank": 8,
+      "table": "public.stock_profile_details"
+    },
+    {
+      "rank": 9,
+      "table": "public.technical_indicators"
+    },
+    {
+      "rank": 10,
+      "table": "_timescaledb_internal._hyper_1_2_chunk"
+    },
+    {
+      "rank": 11,
+      "table": "public.stocks_master"
+    },
+    {
+      "rank": 12,
+      "table": "public.insider_trades"
+    },
+    {
+      "rank": 13,
+      "table": "public.corporate_actions"
+    },
+    {
+      "rank": 14,
+      "table": "public.social_sentiment_snapshots"
+    },
+    {
+      "rank": 15,
+      "table": "public.shareholding_patterns"
+    },
+    {
+      "rank": 16,
+      "table": "public.mutual_fund_holdings"
+    },
+    {
+      "rank": 17,
+      "table": "public.block_deals"
+    },
+    {
+      "rank": 18,
+      "table": "public.earnings_calendar"
+    },
+    {
+      "rank": 19,
+      "table": "public.fii_dii_activity"
+    },
+    {
+      "rank": 20,
+      "table": "_timescaledb_internal._hyper_1_5_chunk"
+    }
+  ],
+  "extensions": [
+    {
+      "extension_name": "pgcrypto",
+      "extension_version": "1.3",
+      "extension_schema": "public"
+    },
+    {
+      "extension_name": "plpgsql",
+      "extension_version": "1.0",
+      "extension_schema": "pg_catalog"
+    },
+    {
+      "extension_name": "timescaledb",
+      "extension_version": "2.13.0",
+      "extension_schema": "public"
+    }
+  ]
+}

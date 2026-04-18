@@ -1,0 +1,607 @@
+{
+  "generated_at": "2026-04-18T20:17:27.129Z",
+  "limit": 10,
+  "app_noise_filters": [
+    "%neon.%",
+    "%pg_stat_activity%",
+    "%pg_stat_replication%",
+    "%pg_stat_subscription%",
+    "%pg_stat_database%",
+    "%pg_catalog.pg_database_size%",
+    "%approximate_working_set_size_seconds%",
+    "%pg_current_wal_lsn%",
+    "%pg_last_wal_replay_lsn%",
+    "SELECT $1%",
+    "%postgres exporter - pg_locks metrics%"
+  ],
+  "app_query_candidate_count": 513,
+  "app_domain_include_filters": [
+    "%stock_%",
+    "%market_%",
+    "%portfolio%",
+    "%news_%",
+    "%alerts%",
+    "%watchlist%",
+    "%ipo%",
+    "%technical_%",
+    "%fundamental%",
+    "%shareholding%",
+    "%mutual_fund%",
+    "%insider_%"
+  ],
+  "app_domain_query_candidate_count": 118,
+  "top_by_rows": [
+    {
+      "query_sample": "SELECT bucket_le, value FROM neon.neon_perf_counters WHERE metric = $1",
+      "calls": "250803",
+      "total_rows": "6834233",
+      "avg_rows_per_call": "27.25",
+      "total_exec_time_ms": "40988.55",
+      "mean_exec_time_ms": "0.16"
+    },
+    {
+      "query_sample": "SELECT state, pg_catalog.to_char(state_change, $1::pg_catalog.text) AS state_change FROM pg_stat_activity WHERE backend_type OPERATOR(pg_catalog.=) $2::pg_catalog.text AND pid OPERATOR(pg_catalog.!=) pg_catalog.pg_backend_pid() AND usename OPERATOR(pg_catalog.!=) $3::pg_catalog.name",
+      "calls": "1066208",
+      "total_rows": "5139746",
+      "avg_rows_per_call": "4.82",
+      "total_exec_time_ms": "141621.79",
+      "mean_exec_time_ms": "0.13"
+    },
+    {
+      "query_sample": "SELECT name, setting, COALESCE(unit, $1), short_desc, vartype FROM pg_settings WHERE vartype IN ($2, $3, $4) AND name != $5",
+      "calls": "8960",
+      "total_rows": "3162880",
+      "avg_rows_per_call": "353.00",
+      "total_exec_time_ms": "12216.61",
+      "mean_exec_time_ms": "1.36"
+    },
+    {
+      "query_sample": "-- This query is copied from postgres exporter - pg_locks metrics -- https://github.com/prometheus-community/postgres_exporter/blob/master/collector/pg_locks.go -- The difference is that we add datid column. SELECT pg_database.datname as datname, pg_database.oid as datid, tmp.mode as mode, COALESCE(",
+      "calls": "62697",
+      "total_rows": "2257092",
+      "avg_rows_per_call": "36.00",
+      "total_exec_time_ms": "19156.68",
+      "mean_exec_time_ms": "0.31"
+    },
+    {
+      "query_sample": "-- NOTE: This is the \"internal\" / \"machine-readable\" version. This outputs the -- working set size looking back 1..60 minutes, labeled with the number of -- minutes. SELECT x::pg_catalog.text AS duration_seconds, COALESCE(neon.approximate_working_set_size_seconds(x), $1) AS size FROM (SELECT generat",
+      "calls": "35806",
+      "total_rows": "2148360",
+      "avg_rows_per_call": "60.00",
+      "total_exec_time_ms": "60307.04",
+      "mean_exec_time_ms": "1.68"
+    },
+    {
+      "query_sample": "-- Get the current LSN from Postgres as a pg_lsn type. SELECT CASE WHEN pg_catalog.pg_is_in_recovery() THEN pg_catalog.pg_last_wal_replay_lsn() ELSE pg_catalog.pg_current_wal_lsn() END AS lsn, CURRENT_TIMESTAMP",
+      "calls": "1078056",
+      "total_rows": "1078056",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "4329.36",
+      "mean_exec_time_ms": "0.00"
+    },
+    {
+      "query_sample": "select count(*) from pg_stat_replication where application_name != $1",
+      "calls": "1066208",
+      "total_rows": "1066208",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "107417.07",
+      "mean_exec_time_ms": "0.10"
+    },
+    {
+      "query_sample": "SELECT COALESCE(pg_catalog.sum(active_time), $1)::pg_catalog.float8 AS total_active_time, COALESCE(pg_catalog.sum(sessions), $2)::pg_catalog.int8 AS total_sessions FROM pg_catalog.pg_stat_database WHERE datname NOT IN ( $3, $4, $5 )",
+      "calls": "1066208",
+      "total_rows": "1066208",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "25305.45",
+      "mean_exec_time_ms": "0.02"
+    },
+    {
+      "query_sample": "select count(*) from pg_stat_activity where backend_type = $1",
+      "calls": "1066208",
+      "total_rows": "1066208",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "91140.14",
+      "mean_exec_time_ms": "0.09"
+    },
+    {
+      "query_sample": "SELECT $1",
+      "calls": "1066208",
+      "total_rows": "1066208",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "4799.49",
+      "mean_exec_time_ms": "0.00"
+    }
+  ],
+  "top_by_calls": [
+    {
+      "query_sample": "-- Get the current LSN from Postgres as a pg_lsn type. SELECT CASE WHEN pg_catalog.pg_is_in_recovery() THEN pg_catalog.pg_last_wal_replay_lsn() ELSE pg_catalog.pg_current_wal_lsn() END AS lsn, CURRENT_TIMESTAMP",
+      "calls": "1078057",
+      "total_rows": "1078057",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "4329.36",
+      "mean_exec_time_ms": "0.00"
+    },
+    {
+      "query_sample": "select count(*) from pg_stat_subscription where pid is not null",
+      "calls": "1066209",
+      "total_rows": "1066209",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "7116.17",
+      "mean_exec_time_ms": "0.01"
+    },
+    {
+      "query_sample": "SELECT $1",
+      "calls": "1066209",
+      "total_rows": "1066209",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "4799.50",
+      "mean_exec_time_ms": "0.00"
+    },
+    {
+      "query_sample": "select count(*) from pg_stat_activity where backend_type = $1",
+      "calls": "1066209",
+      "total_rows": "1066209",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "91140.22",
+      "mean_exec_time_ms": "0.09"
+    },
+    {
+      "query_sample": "SELECT COALESCE(pg_catalog.sum(active_time), $1)::pg_catalog.float8 AS total_active_time, COALESCE(pg_catalog.sum(sessions), $2)::pg_catalog.int8 AS total_sessions FROM pg_catalog.pg_stat_database WHERE datname NOT IN ( $3, $4, $5 )",
+      "calls": "1066209",
+      "total_rows": "1066209",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "25305.47",
+      "mean_exec_time_ms": "0.02"
+    },
+    {
+      "query_sample": "SELECT state, pg_catalog.to_char(state_change, $1::pg_catalog.text) AS state_change FROM pg_stat_activity WHERE backend_type OPERATOR(pg_catalog.=) $2::pg_catalog.text AND pid OPERATOR(pg_catalog.!=) pg_catalog.pg_backend_pid() AND usename OPERATOR(pg_catalog.!=) $3::pg_catalog.name",
+      "calls": "1066209",
+      "total_rows": "5139754",
+      "avg_rows_per_call": "4.82",
+      "total_exec_time_ms": "141621.93",
+      "mean_exec_time_ms": "0.13"
+    },
+    {
+      "query_sample": "select count(*) from pg_stat_replication where application_name != $1",
+      "calls": "1066209",
+      "total_rows": "1066209",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "107417.16",
+      "mean_exec_time_ms": "0.10"
+    },
+    {
+      "query_sample": "SELECT COALESCE(lfc_value, $1) AS count FROM neon.neon_lfc_stats WHERE lfc_key = $2",
+      "calls": "501568",
+      "total_rows": "501568",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "6958.39",
+      "mean_exec_time_ms": "0.01"
+    },
+    {
+      "query_sample": "SELECT bucket_le, value FROM neon.neon_perf_counters WHERE metric = $1",
+      "calls": "250807",
+      "total_rows": "6834342",
+      "avg_rows_per_call": "27.25",
+      "total_exec_time_ms": "40989.18",
+      "mean_exec_time_ms": "0.16"
+    },
+    {
+      "query_sample": "INSERT INTO stock_price_ticks ( symbol, ts, open, high, low, close, volume, source, dataset_type, timeframe, source_family, metadata ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb) ON CONFLICT (symbol, ts) DO UPDATE SET open = EXCLUDED.open, high = EXCLUDED.high, low = EXCLUDED.l",
+      "calls": "180553",
+      "total_rows": "180553",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "67095.57",
+      "mean_exec_time_ms": "0.37"
+    }
+  ],
+  "top_by_total_exec_time": [
+    {
+      "query_sample": "SELECT pg_catalog.sum(pg_catalog.pg_database_size(datname)) AS total_size FROM pg_catalog.pg_database -- Ignore invalid databases, as we will likely have problems with -- getting their size from the Pageserver. WHERE datconnlimit != $1",
+      "calls": "62681",
+      "total_rows": "62681",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "487222.46",
+      "mean_exec_time_ms": "7.77"
+    },
+    {
+      "query_sample": "-- We export stats for 10 non-system databases. Without this limit it is too -- easy to abuse the system by creating lots of databases. SELECT pg_catalog.pg_database_size(datname) AS db_size, deadlocks, tup_inserted AS inserted, tup_updated AS updated, tup_deleted AS deleted, datname, datid FROM pg_",
+      "calls": "62689",
+      "total_rows": "62689",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "216271.68",
+      "mean_exec_time_ms": "3.45"
+    },
+    {
+      "query_sample": "SELECT pg_database_size(datname) AS db_size, datid FROM pg_stat_database WHERE datname IN ( SELECT datname FROM pg_database WHERE datconnlimit != $1 AND datname <> $2 AND NOT datistemplate ORDER BY oid LIMIT $3 )",
+      "calls": "62689",
+      "total_rows": "62689",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "205918.07",
+      "mean_exec_time_ms": "3.28"
+    },
+    {
+      "query_sample": "SELECT state, pg_catalog.to_char(state_change, $1::pg_catalog.text) AS state_change FROM pg_stat_activity WHERE backend_type OPERATOR(pg_catalog.=) $2::pg_catalog.text AND pid OPERATOR(pg_catalog.!=) pg_catalog.pg_backend_pid() AND usename OPERATOR(pg_catalog.!=) $3::pg_catalog.name",
+      "calls": "1066209",
+      "total_rows": "5139754",
+      "avg_rows_per_call": "4.82",
+      "total_exec_time_ms": "141621.93",
+      "mean_exec_time_ms": "0.13"
+    },
+    {
+      "query_sample": "select count(*) from pg_stat_replication where application_name != $1",
+      "calls": "1066209",
+      "total_rows": "1066209",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "107417.16",
+      "mean_exec_time_ms": "0.10"
+    },
+    {
+      "query_sample": "select count(*) from pg_stat_activity where backend_type = $1",
+      "calls": "1066209",
+      "total_rows": "1066209",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "91140.22",
+      "mean_exec_time_ms": "0.09"
+    },
+    {
+      "query_sample": "INSERT INTO stock_price_ticks ( symbol, ts, open, high, low, close, volume, source, dataset_type, timeframe, source_family, metadata ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb) ON CONFLICT (symbol, ts) DO UPDATE SET open = EXCLUDED.open, high = EXCLUDED.high, low = EXCLUDED.l",
+      "calls": "180553",
+      "total_rows": "180553",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "67095.57",
+      "mean_exec_time_ms": "0.37"
+    },
+    {
+      "query_sample": "-- NOTE: This is the \"internal\" / \"machine-readable\" version. This outputs the -- working set size looking back 1..60 minutes, labeled with the number of -- minutes. SELECT x::pg_catalog.text AS duration_seconds, COALESCE(neon.approximate_working_set_size_seconds(x), $1) AS size FROM (SELECT generat",
+      "calls": "35806",
+      "total_rows": "2148360",
+      "avg_rows_per_call": "60.00",
+      "total_exec_time_ms": "60307.04",
+      "mean_exec_time_ms": "1.68"
+    },
+    {
+      "query_sample": "SELECT (SELECT setting FROM pg_catalog.pg_settings WHERE name = $1) AS timeline_id, -- Postgres creates temporary snapshot files of the form %X-%X.snap.%d.tmp. -- These temporary snapshot files are renamed to the actual snapshot files -- after they are completely built. We only WAL-log the completel",
+      "calls": "62698",
+      "total_rows": "62698",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "46717.04",
+      "mean_exec_time_ms": "0.75"
+    },
+    {
+      "query_sample": "WITH latest_metrics AS ( SELECT DISTINCT ON (symbol) symbol, as_of_date, week_52_high, week_52_low, week_52_high_date, week_52_low_date, source, metadata, created_at, updated_at FROM stock_metrics_snapshots WHERE week_52_high IS NOT NULL OR week_52_low IS NOT NULL ORDER BY symbol, as_of_date DESC ),",
+      "calls": "76",
+      "total_rows": "1900",
+      "avg_rows_per_call": "25.00",
+      "total_exec_time_ms": "44617.86",
+      "mean_exec_time_ms": "587.08"
+    }
+  ],
+  "top_app_by_rows": [
+    {
+      "query_sample": "SELECT name, setting, COALESCE(unit, $1), short_desc, vartype FROM pg_settings WHERE vartype IN ($2, $3, $4) AND name != $5",
+      "calls": "8960",
+      "total_rows": "3162880",
+      "avg_rows_per_call": "353.00",
+      "total_exec_time_ms": "12216.61",
+      "mean_exec_time_ms": "1.36"
+    },
+    {
+      "query_sample": "SELECT datname database_name, pg_catalog.age(datfrozenxid) frozen_xid_age FROM pg_catalog.pg_database ORDER BY frozen_xid_age DESC LIMIT $1",
+      "calls": "62698",
+      "total_rows": "250792",
+      "avg_rows_per_call": "4.00",
+      "total_exec_time_ms": "1621.05",
+      "mean_exec_time_ms": "0.03"
+    },
+    {
+      "query_sample": "SELECT datname database_name, pg_catalog.mxid_age(datminmxid) min_mxid_age FROM pg_catalog.pg_database ORDER BY min_mxid_age DESC LIMIT $1",
+      "calls": "62692",
+      "total_rows": "250768",
+      "avg_rows_per_call": "4.00",
+      "total_exec_time_ms": "1629.94",
+      "mean_exec_time_ms": "0.03"
+    },
+    {
+      "query_sample": "SELECT symbol, bucket AS timestamp, open::DOUBLE PRECISION AS open, high::DOUBLE PRECISION AS high, low::DOUBLE PRECISION AS low, close::DOUBLE PRECISION AS close, volume FROM stock_price_candles_1d WHERE symbol = $1 AND ($2::timestamptz IS NULL OR bucket >= $2::timestamptz) AND ($3::timestamptz IS ",
+      "calls": "6486",
+      "total_rows": "248421",
+      "avg_rows_per_call": "38.30",
+      "total_exec_time_ms": "775.83",
+      "mean_exec_time_ms": "0.12"
+    },
+    {
+      "query_sample": "INSERT INTO technical_indicators ( symbol, bucket, ts, indicators, source, metadata ) VALUES ($1, $2, $3, $4::jsonb, $5, $6::jsonb), ($7, $8, $9, $10::jsonb, $11, $12::jsonb), ($13, $14, $15, $16::jsonb, $17, $18::jsonb), ($19, $20, $21, $22::jsonb, $23, $24::jsonb), ($25, $26, $27, $28::jsonb, $29,",
+      "calls": "774",
+      "total_rows": "247680",
+      "avg_rows_per_call": "320.00",
+      "total_exec_time_ms": "3025.24",
+      "mean_exec_time_ms": "3.91"
+    },
+    {
+      "query_sample": "INSERT INTO stock_price_ticks ( symbol, ts, open, high, low, close, volume, source, dataset_type, timeframe, source_family, metadata ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb) ON CONFLICT (symbol, ts) DO UPDATE SET open = EXCLUDED.open, high = EXCLUDED.high, low = EXCLUDED.l",
+      "calls": "180553",
+      "total_rows": "180553",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "67095.57",
+      "mean_exec_time_ms": "0.37"
+    },
+    {
+      "query_sample": "SELECT pg_roles.rolname, pg_roles.rolconnlimit FROM pg_roles",
+      "calls": "8960",
+      "total_rows": "161280",
+      "avg_rows_per_call": "18.00",
+      "total_exec_time_ms": "161.40",
+      "mean_exec_time_ms": "0.02"
+    },
+    {
+      "query_sample": "SELECT symbol, time_bucket(INTERVAL $6, ts) AS timestamp, (array_agg(close ORDER BY ts ASC))[$7]::DOUBLE PRECISION AS open, max(COALESCE(high, close))::DOUBLE PRECISION AS high, min(COALESCE(low, close))::DOUBLE PRECISION AS low, (array_agg(close ORDER BY ts DESC))[$8]::DOUBLE PRECISION AS close, CO",
+      "calls": "5692",
+      "total_rows": "106993",
+      "avg_rows_per_call": "18.80",
+      "total_exec_time_ms": "6577.21",
+      "mean_exec_time_ms": "1.16"
+    },
+    {
+      "query_sample": "INSERT INTO technical_indicators ( symbol, bucket, ts, indicators, source, metadata ) VALUES ($1, $2, $3, $4::jsonb, $5, $6::jsonb), ($7, $8, $9, $10::jsonb, $11, $12::jsonb), ($13, $14, $15, $16::jsonb, $17, $18::jsonb), ($19, $20, $21, $22::jsonb, $23, $24::jsonb), ($25, $26, $27, $28::jsonb, $29,",
+      "calls": "5342",
+      "total_rows": "101498",
+      "avg_rows_per_call": "19.00",
+      "total_exec_time_ms": "1521.97",
+      "mean_exec_time_ms": "0.28"
+    },
+    {
+      "query_sample": "COPY _timescaledb_internal._hyper_1_6_chunk (symbol, ts, open, high, low, close, volume, source, metadata, created_at, updated_at, dataset_type, timeframe, source_family) TO stdout",
+      "calls": "1",
+      "total_rows": "100167",
+      "avg_rows_per_call": "100167.00",
+      "total_exec_time_ms": "826.22",
+      "mean_exec_time_ms": "826.22"
+    }
+  ],
+  "top_app_by_calls": [
+    {
+      "query_sample": "INSERT INTO stock_price_ticks ( symbol, ts, open, high, low, close, volume, source, dataset_type, timeframe, source_family, metadata ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb) ON CONFLICT (symbol, ts) DO UPDATE SET open = EXCLUDED.open, high = EXCLUDED.high, low = EXCLUDED.l",
+      "calls": "180553",
+      "total_rows": "180553",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "67095.57",
+      "mean_exec_time_ms": "0.37"
+    },
+    {
+      "query_sample": "SELECT p.id::text AS \"portfolioId\", p.user_id AS \"userId\", p.portfolio_name AS \"portfolioName\", SUM( CASE WHEN LOWER(pt.transaction_type) = $2 THEN pt.quantity::DOUBLE PRECISION WHEN LOWER(pt.transaction_type) = $3 THEN -pt.quantity::DOUBLE PRECISION ELSE $4 END ) AS net_quantity FROM portfolios p J",
+      "calls": "180545",
+      "total_rows": "0",
+      "avg_rows_per_call": "0.00",
+      "total_exec_time_ms": "1480.63",
+      "mean_exec_time_ms": "0.01"
+    },
+    {
+      "query_sample": "-- Returns no rows when get_compute_primary_memory_bytes() returns NULL, causing sql_exporter -- to NOT emit the metric. This matches autoscaling_metrics behavior. SELECT bytes FROM (SELECT get_compute_primary_memory_bytes() AS bytes) t WHERE bytes IS NOT NULL",
+      "calls": "98497",
+      "total_rows": "0",
+      "avg_rows_per_call": "0.00",
+      "total_exec_time_ms": "2962.48",
+      "mean_exec_time_ms": "0.03"
+    },
+    {
+      "query_sample": "SELECT pg_size_bytes(current_setting($1))",
+      "calls": "62951",
+      "total_rows": "62951",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "745.76",
+      "mean_exec_time_ms": "0.01"
+    },
+    {
+      "query_sample": "SELECT setting::pg_catalog.int4 AS max_cluster_size FROM pg_catalog.pg_settings WHERE name = $1",
+      "calls": "62701",
+      "total_rows": "62701",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "44035.97",
+      "mean_exec_time_ms": "0.70"
+    },
+    {
+      "query_sample": "SELECT checkpoints_req FROM pg_catalog.pg_stat_bgwriter",
+      "calls": "62698",
+      "total_rows": "62698",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "196.03",
+      "mean_exec_time_ms": "0.00"
+    },
+    {
+      "query_sample": "SELECT (SELECT setting FROM pg_catalog.pg_settings WHERE name = $1) AS timeline_id, -- Postgres creates temporary snapshot files of the form %X-%X.snap.%d.tmp. -- These temporary snapshot files are renamed to the actual snapshot files -- after they are completely built. We only WAL-log the completel",
+      "calls": "62698",
+      "total_rows": "62698",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "46717.04",
+      "mean_exec_time_ms": "0.75"
+    },
+    {
+      "query_sample": "SELECT subenabled::pg_catalog.text AS enabled, pg_catalog.count(*) AS subscriptions_count FROM pg_catalog.pg_subscription GROUP BY subenabled",
+      "calls": "62698",
+      "total_rows": "0",
+      "avg_rows_per_call": "0.00",
+      "total_exec_time_ms": "468.79",
+      "mean_exec_time_ms": "0.01"
+    },
+    {
+      "query_sample": "SELECT datname database_name, pg_catalog.age(datfrozenxid) frozen_xid_age FROM pg_catalog.pg_database ORDER BY frozen_xid_age DESC LIMIT $1",
+      "calls": "62698",
+      "total_rows": "250792",
+      "avg_rows_per_call": "4.00",
+      "total_exec_time_ms": "1621.05",
+      "mean_exec_time_ms": "0.03"
+    },
+    {
+      "query_sample": "SELECT checkpoints_timed FROM pg_catalog.pg_stat_bgwriter",
+      "calls": "62697",
+      "total_rows": "62697",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "197.20",
+      "mean_exec_time_ms": "0.00"
+    }
+  ],
+  "top_app_by_total_exec_time": [
+    {
+      "query_sample": "INSERT INTO stock_price_ticks ( symbol, ts, open, high, low, close, volume, source, dataset_type, timeframe, source_family, metadata ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb) ON CONFLICT (symbol, ts) DO UPDATE SET open = EXCLUDED.open, high = EXCLUDED.high, low = EXCLUDED.l",
+      "calls": "180553",
+      "total_rows": "180553",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "67095.57",
+      "mean_exec_time_ms": "0.37"
+    },
+    {
+      "query_sample": "SELECT (SELECT setting FROM pg_catalog.pg_settings WHERE name = $1) AS timeline_id, -- Postgres creates temporary snapshot files of the form %X-%X.snap.%d.tmp. -- These temporary snapshot files are renamed to the actual snapshot files -- after they are completely built. We only WAL-log the completel",
+      "calls": "62698",
+      "total_rows": "62698",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "46717.04",
+      "mean_exec_time_ms": "0.75"
+    },
+    {
+      "query_sample": "WITH latest_metrics AS ( SELECT DISTINCT ON (symbol) symbol, as_of_date, week_52_high, week_52_low, week_52_high_date, week_52_low_date, source, metadata, created_at, updated_at FROM stock_metrics_snapshots WHERE week_52_high IS NOT NULL OR week_52_low IS NOT NULL ORDER BY symbol, as_of_date DESC ),",
+      "calls": "76",
+      "total_rows": "1900",
+      "avg_rows_per_call": "25.00",
+      "total_exec_time_ms": "44617.86",
+      "mean_exec_time_ms": "587.08"
+    },
+    {
+      "query_sample": "SELECT setting::pg_catalog.int4 AS max_cluster_size FROM pg_catalog.pg_settings WHERE name = $1",
+      "calls": "62701",
+      "total_rows": "62701",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "44035.97",
+      "mean_exec_time_ms": "0.70"
+    },
+    {
+      "query_sample": "WITH latest_metrics AS ( SELECT DISTINCT ON (symbol) symbol, as_of_date, week_52_high, week_52_low, week_52_high_date, week_52_low_date, source, metadata, created_at, updated_at FROM stock_metrics_snapshots WHERE week_52_high IS NOT NULL OR week_52_low IS NOT NULL ORDER BY symbol, as_of_date DESC ),",
+      "calls": "77",
+      "total_rows": "1925",
+      "avg_rows_per_call": "25.00",
+      "total_exec_time_ms": "43946.21",
+      "mean_exec_time_ms": "570.73"
+    },
+    {
+      "query_sample": "COPY public.market_snapshots (captured_minute, captured_at, source, trending, price_shockers, nse_most_active, bse_most_active, metadata, created_at, updated_at) TO stdout",
+      "calls": "1",
+      "total_rows": "9017",
+      "avg_rows_per_call": "9017.00",
+      "total_exec_time_ms": "38690.19",
+      "mean_exec_time_ms": "38690.19"
+    },
+    {
+      "query_sample": "WITH ranked AS ( SELECT symbol, ts, close::DOUBLE PRECISION AS close, COALESCE(volume, $3)::DOUBLE PRECISION AS volume, ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY ts DESC) AS rn FROM stock_price_ticks WHERE symbol = ANY($1::text[]) AND ($2::text IS NULL OR dataset_type = $2) ), latest AS ( SELE",
+      "calls": "3939",
+      "total_rows": "205",
+      "avg_rows_per_call": "0.05",
+      "total_exec_time_ms": "24264.04",
+      "mean_exec_time_ms": "6.16"
+    },
+    {
+      "query_sample": "SELECT symbol FROM stock_price_ticks WHERE dataset_type = $2 GROUP BY symbol ORDER BY MAX(ts) DESC LIMIT $1",
+      "calls": "129",
+      "total_rows": "6450",
+      "avg_rows_per_call": "50.00",
+      "total_exec_time_ms": "23177.59",
+      "mean_exec_time_ms": "179.67"
+    },
+    {
+      "query_sample": "SELECT n.nspname AS schema_name, COALESCE(SUM(pg_total_relation_size(c.oid)), $1)::bigint AS total_bytes, pg_size_pretty(COALESCE(SUM(pg_total_relation_size(c.oid)), $2)) AS total_pretty FROM pg_namespace n LEFT JOIN pg_class c ON c.relnamespace = n.oid AND c.relkind IN ($3,$4,$5,$6,$7) WHERE n.nspn",
+      "calls": "1",
+      "total_rows": "9",
+      "avg_rows_per_call": "9.00",
+      "total_exec_time_ms": "17622.34",
+      "mean_exec_time_ms": "17622.34"
+    },
+    {
+      "query_sample": "INSERT INTO market_snapshots ( captured_minute, captured_at, source, trending, price_shockers, nse_most_active, bse_most_active, metadata ) VALUES ( date_trunc($8, $1::timestamptz), $1::timestamptz, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6::jsonb, $7::jsonb ) ON CONFLICT (captured_minute) DO UPDATE S",
+      "calls": "9394",
+      "total_rows": "9394",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "15517.59",
+      "mean_exec_time_ms": "1.65"
+    }
+  ],
+  "top_app_domain_by_total_exec_time": [
+    {
+      "query_sample": "INSERT INTO stock_price_ticks ( symbol, ts, open, high, low, close, volume, source, dataset_type, timeframe, source_family, metadata ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb) ON CONFLICT (symbol, ts) DO UPDATE SET open = EXCLUDED.open, high = EXCLUDED.high, low = EXCLUDED.l",
+      "calls": "180553",
+      "total_rows": "180553",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "67095.57",
+      "mean_exec_time_ms": "0.37"
+    },
+    {
+      "query_sample": "WITH latest_metrics AS ( SELECT DISTINCT ON (symbol) symbol, as_of_date, week_52_high, week_52_low, week_52_high_date, week_52_low_date, source, metadata, created_at, updated_at FROM stock_metrics_snapshots WHERE week_52_high IS NOT NULL OR week_52_low IS NOT NULL ORDER BY symbol, as_of_date DESC ),",
+      "calls": "76",
+      "total_rows": "1900",
+      "avg_rows_per_call": "25.00",
+      "total_exec_time_ms": "44617.86",
+      "mean_exec_time_ms": "587.08"
+    },
+    {
+      "query_sample": "WITH latest_metrics AS ( SELECT DISTINCT ON (symbol) symbol, as_of_date, week_52_high, week_52_low, week_52_high_date, week_52_low_date, source, metadata, created_at, updated_at FROM stock_metrics_snapshots WHERE week_52_high IS NOT NULL OR week_52_low IS NOT NULL ORDER BY symbol, as_of_date DESC ),",
+      "calls": "77",
+      "total_rows": "1925",
+      "avg_rows_per_call": "25.00",
+      "total_exec_time_ms": "43946.21",
+      "mean_exec_time_ms": "570.73"
+    },
+    {
+      "query_sample": "COPY public.market_snapshots (captured_minute, captured_at, source, trending, price_shockers, nse_most_active, bse_most_active, metadata, created_at, updated_at) TO stdout",
+      "calls": "1",
+      "total_rows": "9017",
+      "avg_rows_per_call": "9017.00",
+      "total_exec_time_ms": "38690.19",
+      "mean_exec_time_ms": "38690.19"
+    },
+    {
+      "query_sample": "WITH ranked AS ( SELECT symbol, ts, close::DOUBLE PRECISION AS close, COALESCE(volume, $3)::DOUBLE PRECISION AS volume, ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY ts DESC) AS rn FROM stock_price_ticks WHERE symbol = ANY($1::text[]) AND ($2::text IS NULL OR dataset_type = $2) ), latest AS ( SELE",
+      "calls": "3939",
+      "total_rows": "205",
+      "avg_rows_per_call": "0.05",
+      "total_exec_time_ms": "24264.04",
+      "mean_exec_time_ms": "6.16"
+    },
+    {
+      "query_sample": "SELECT symbol FROM stock_price_ticks WHERE dataset_type = $2 GROUP BY symbol ORDER BY MAX(ts) DESC LIMIT $1",
+      "calls": "129",
+      "total_rows": "6450",
+      "avg_rows_per_call": "50.00",
+      "total_exec_time_ms": "23177.59",
+      "mean_exec_time_ms": "179.67"
+    },
+    {
+      "query_sample": "INSERT INTO market_snapshots ( captured_minute, captured_at, source, trending, price_shockers, nse_most_active, bse_most_active, metadata ) VALUES ( date_trunc($8, $1::timestamptz), $1::timestamptz, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6::jsonb, $7::jsonb ) ON CONFLICT (captured_minute) DO UPDATE S",
+      "calls": "9394",
+      "total_rows": "9394",
+      "avg_rows_per_call": "1.00",
+      "total_exec_time_ms": "15517.59",
+      "mean_exec_time_ms": "1.65"
+    },
+    {
+      "query_sample": "SELECT symbol, time_bucket(INTERVAL $6, ts) AS timestamp, (array_agg(close ORDER BY ts ASC))[$7]::DOUBLE PRECISION AS open, max(COALESCE(high, close))::DOUBLE PRECISION AS high, min(COALESCE(low, close))::DOUBLE PRECISION AS low, (array_agg(close ORDER BY ts DESC))[$8]::DOUBLE PRECISION AS close, CO",
+      "calls": "5692",
+      "total_rows": "106993",
+      "avg_rows_per_call": "18.80",
+      "total_exec_time_ms": "6577.21",
+      "mean_exec_time_ms": "1.16"
+    },
+    {
+      "query_sample": "SELECT symbol FROM ( SELECT symbol, MAX(ts) AS latest_ts FROM stock_price_ticks WHERE dataset_type = $2 GROUP BY symbol ) latest ORDER BY latest_ts DESC LIMIT $1",
+      "calls": "23",
+      "total_rows": "920",
+      "avg_rows_per_call": "40.00",
+      "total_exec_time_ms": "4763.01",
+      "mean_exec_time_ms": "207.09"
+    },
+    {
+      "query_sample": "INSERT INTO technical_indicators ( symbol, bucket, ts, indicators, source, metadata ) VALUES ($1, $2, $3, $4::jsonb, $5, $6::jsonb), ($7, $8, $9, $10::jsonb, $11, $12::jsonb), ($13, $14, $15, $16::jsonb, $17, $18::jsonb), ($19, $20, $21, $22::jsonb, $23, $24::jsonb), ($25, $26, $27, $28::jsonb, $29,",
+      "calls": "774",
+      "total_rows": "247680",
+      "avg_rows_per_call": "320.00",
+      "total_exec_time_ms": "3025.24",
+      "mean_exec_time_ms": "3.91"
+    }
+  ]
+}
