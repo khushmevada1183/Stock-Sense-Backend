@@ -41,8 +41,14 @@ const buildSuccessResponse = (dataOrOptions = null, options = {}) => {
     };
   }
 
+  const resolvedMessage =
+    data && typeof data === 'object' && !Array.isArray(data) && typeof data.message === 'string' && data.message.trim()
+      ? data.message.trim()
+      : 'Request successful';
+
   const payload = {
     success: true,
+    message: resolvedMessage,
     data: data === undefined ? null : data,
   };
 

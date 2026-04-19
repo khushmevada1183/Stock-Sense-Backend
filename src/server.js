@@ -18,6 +18,7 @@ const { errorMiddleware } = require('./utils/errorHandler');
 const { rateLimitMiddleware } = require('./middleware/rateLimitMiddleware');
 const { requestContext } = require('./shared/middleware/requestContext');
 const { attachResponseHelpers } = require('./shared/middleware/responseHelpers');
+const { attachResponseMessage } = require('./shared/middleware/responseMessage');
 const { API_CONFIG } = require('./config');
 const { openApiSpec } = require('./docs/openapi');
 const v1Routes = require('./routes/v1');
@@ -108,6 +109,7 @@ patchConsole();
 // Add global rate limiting
 app.use(rateLimitMiddleware);
 app.use(attachResponseHelpers);
+app.use(attachResponseMessage);
 
 // Try to use compression if available
 try {
@@ -147,10 +149,12 @@ app.use('/api', apiRoutes);
 
 // 404 handler
 app.use((req, res) => {
+  const message = `Route not found: ${req.method} ${req.originalUrl}`;
   res.status(404).json({
     success: false,
+    message,
     error: {
-      message: `Route not found: ${req.method} ${req.originalUrl}`,
+      message,
       code: 'ERR_ROUTE_NOT_FOUND',
       statusCode: 404,
       timestamp: new Date().toISOString()

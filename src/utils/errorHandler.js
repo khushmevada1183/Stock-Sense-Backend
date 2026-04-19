@@ -32,6 +32,7 @@ const formatErrorResponse = (error, context = {}) => {
   if (error instanceof ApiError) {
     return {
       success: false,
+      message: error.message,
       error: {
         message: error.message,
         code: error.errorCode,
@@ -50,6 +51,7 @@ const formatErrorResponse = (error, context = {}) => {
     
     return {
       success: false,
+      message,
       error: {
         message,
         code: `ERR_${statusCode}`,
@@ -65,10 +67,12 @@ const formatErrorResponse = (error, context = {}) => {
   // Handle generic errors
   // SECURITY: Never expose stack traces or sensitive details in production
   const isDevelopment = process.env.NODE_ENV === 'development';
+  const message = error.message || 'An unexpected error occurred';
   return {
     success: false,
+    message,
     error: {
-      message: error.message || 'An unexpected error occurred',
+      message,
       code: 'ERR_UNKNOWN',
       statusCode: 500,
       details: isDevelopment ? { stack: error.stack, source: error.source } : null,
