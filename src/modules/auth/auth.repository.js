@@ -12,6 +12,10 @@ const toUserProfile = (row) => {
     fullName: row.full_name,
     phone: row.phone,
     avatarUrl: row.avatar_url,
+    gender: row.gender,
+    dob: row.dob,
+    incomeRange: row.income_range,
+    occupation: row.occupation,
     isEmailVerified: row.is_email_verified,
     isActive: row.is_active,
     createdAt: row.created_at,
@@ -31,6 +35,10 @@ const findUserByEmail = async (email) => {
         full_name,
         phone,
         avatar_url,
+        gender,
+        dob,
+        income_range,
+        occupation,
         is_email_verified,
         is_active,
         created_at,
@@ -64,6 +72,10 @@ const findUserById = async (userId) => {
         full_name,
         phone,
         avatar_url,
+        gender,
+        dob,
+        income_range,
+        occupation,
         is_email_verified,
         is_active,
         created_at,
@@ -77,6 +89,44 @@ const findUserById = async (userId) => {
   );
 
   return toUserProfile(result.rows[0]);
+};
+
+const findUserAuthById = async (userId) => {
+  const result = await query(
+    `
+      SELECT
+        id::text AS id,
+        email,
+        role,
+        password_hash,
+        full_name,
+        phone,
+        avatar_url,
+        gender,
+        dob,
+        income_range,
+        occupation,
+        is_email_verified,
+        is_active,
+        created_at,
+        updated_at,
+        last_login_at
+      FROM users
+      WHERE id = $1::uuid
+      LIMIT 1;
+    `,
+    [userId]
+  );
+
+  const row = result.rows[0];
+  if (!row) {
+    return null;
+  }
+
+  return {
+    ...toUserProfile(row),
+    passwordHash: row.password_hash,
+  };
 };
 
 const findUsersByIds = async (userIds) => {
@@ -97,6 +147,10 @@ const findUsersByIds = async (userIds) => {
         full_name,
         phone,
         avatar_url,
+        gender,
+        dob,
+        income_range,
+        occupation,
         is_email_verified,
         is_active,
         created_at,
@@ -124,6 +178,10 @@ const createUser = async ({ email, passwordHash, fullName, phone }) => {
         full_name,
         phone,
         avatar_url,
+        gender,
+        dob,
+        income_range,
+        occupation,
         is_email_verified,
         is_active,
         created_at,
@@ -178,6 +236,26 @@ const updateUserProfile = async (userId, updates) => {
     fields.push(`avatar_url = $${values.length}`);
   }
 
+  if (updates.gender !== undefined) {
+    values.push(updates.gender);
+    fields.push(`gender = $${values.length}`);
+  }
+
+  if (updates.dob !== undefined) {
+    values.push(updates.dob);
+    fields.push(`dob = $${values.length}::date`);
+  }
+
+  if (updates.incomeRange !== undefined) {
+    values.push(updates.incomeRange);
+    fields.push(`income_range = $${values.length}`);
+  }
+
+  if (updates.occupation !== undefined) {
+    values.push(updates.occupation);
+    fields.push(`occupation = $${values.length}`);
+  }
+
   if (!fields.length) {
     return findUserById(userId);
   }
@@ -196,6 +274,10 @@ const updateUserProfile = async (userId, updates) => {
         full_name,
         phone,
         avatar_url,
+        gender,
+        dob,
+        income_range,
+        occupation,
         is_email_verified,
         is_active,
         created_at,
@@ -208,14 +290,22 @@ const updateUserProfile = async (userId, updates) => {
   return toUserProfile(result.rows[0]);
 };
 
-const createUserSession = async ({ userId, refreshTokenHash, userAgent, ipAddress, expiresAt }) => {
-  await query(
+const createUserSession = async ({ sessionId = null, userId, refreshTokenHash, userAgent, ipAddress, expiresAt }) => {
+  const result = await query(
     `
-      INSERT INTO user_sessions (user_id, refresh_token_hash, user_agent, ip_address, expires_at)
-      VALUES ($1::uuid, $2, $3, $4::inet, $5::timestamptz);
+      INSERT INTO user_sessions (id, user_id, refresh_token_hash, user_agent, ip_address, expires_at, last_used_at)
+      VALUES (COALESCE($1::uuid, gen_random_uuid()), $2::uuid, $3, $4, $5::inet, $6::timestamptz, NOW())
+      RETURNING
+        id::text AS id,
+        user_id::text AS "userId",
+        created_at AS "createdAt",
+        last_used_at AS "lastUsedAt",
+        expires_at AS "expiresAt";
     `,
-    [userId, refreshTokenHash, userAgent || null, ipAddress || null, expiresAt]
+    [sessionId, userId, refreshTokenHash, userAgent || null, ipAddress || null, expiresAt]
   );
+
+  return result.rows[0] || null;
 };
 
 const listActiveSessionsByUserId = async (userId, { limit = 20 } = {}) => {
@@ -226,18 +316,43 @@ const listActiveSessionsByUserId = async (userId, { limit = 20 } = {}) => {
         user_agent AS "userAgent",
         ip_address::text AS "ipAddress",
         created_at AS "createdAt",
+        last_used_at AS "lastUsedAt",
         expires_at AS "expiresAt"
       FROM user_sessions
       WHERE user_id = $1::uuid
         AND revoked_at IS NULL
         AND expires_at > NOW()
-      ORDER BY created_at DESC
+      ORDER BY last_used_at DESC, created_at DESC
       LIMIT $2;
     `,
     [userId, limit]
   );
 
   return result.rows;
+};
+
+const findActiveSessionById = async ({ sessionId, userId }) => {
+  const result = await query(
+    `
+      SELECT
+        id::text AS id,
+        user_id::text AS "userId",
+        user_agent AS "userAgent",
+        ip_address::text AS "ipAddress",
+        created_at AS "createdAt",
+        last_used_at AS "lastUsedAt",
+        expires_at AS "expiresAt"
+      FROM user_sessions
+      WHERE id = $1::uuid
+        AND user_id = $2::uuid
+        AND revoked_at IS NULL
+        AND expires_at > NOW()
+      LIMIT 1;
+    `,
+    [sessionId, userId]
+  );
+
+  return result.rows[0] || null;
 };
 
 const enforceMaxActiveSessions = async ({ userId, maxActiveSessions }) => {
@@ -264,6 +379,7 @@ const findActiveSessionByHash = async (refreshTokenHash) => {
   const result = await query(
     `
       SELECT
+        id::text AS "sessionId",
         user_id::text AS "userId",
         expires_at AS "expiresAt"
       FROM user_sessions
@@ -290,6 +406,23 @@ const revokeUserSessionByHash = async (refreshTokenHash) => {
   );
 };
 
+const revokeActiveSessionById = async ({ sessionId, userId }) => {
+  const result = await query(
+    `
+      UPDATE user_sessions
+      SET revoked_at = NOW()
+      WHERE id = $1::uuid
+        AND user_id = $2::uuid
+        AND revoked_at IS NULL
+        AND expires_at > NOW()
+      RETURNING id::text AS id;
+    `,
+    [sessionId, userId]
+  );
+
+  return result.rows[0] || null;
+};
+
 const revokeActiveSessionsByUserId = async (userId) => {
   await query(
     `
@@ -299,6 +432,20 @@ const revokeActiveSessionsByUserId = async (userId) => {
         AND revoked_at IS NULL;
     `,
     [userId]
+  );
+};
+
+const touchUserSessionActivity = async ({ sessionId, userId }) => {
+  await query(
+    `
+      UPDATE user_sessions
+      SET last_used_at = NOW()
+      WHERE id = $1::uuid
+        AND user_id = $2::uuid
+        AND revoked_at IS NULL
+        AND expires_at > NOW();
+    `,
+    [sessionId, userId]
   );
 };
 
@@ -544,6 +691,7 @@ const deleteLoginAttempt = async ({ scope, identifier }) => {
 module.exports = {
   findUserByEmail,
   findUserById,
+  findUserAuthById,
   findUsersByIds,
   createUser,
   updateUserLastLogin,
@@ -552,10 +700,13 @@ module.exports = {
   updateUserProfile,
   createUserSession,
   listActiveSessionsByUserId,
+  findActiveSessionById,
   enforceMaxActiveSessions,
   findActiveSessionByHash,
   revokeUserSessionByHash,
+  revokeActiveSessionById,
   revokeActiveSessionsByUserId,
+  touchUserSessionActivity,
   findOAuthIdentity,
   createOAuthIdentity,
   createPasswordResetToken,

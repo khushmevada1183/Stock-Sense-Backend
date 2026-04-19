@@ -9,6 +9,9 @@ const {
   normalizeListLimitQuery,
   normalizeForgotPasswordPayload,
   normalizeResetPasswordPayload,
+  normalizeChangePasswordPayload,
+  normalizeLogoutDevicePayload,
+  normalizeReportActivityPayload,
   normalizeProfileUpdatePayload,
 } = require('./auth.validation');
 const {
@@ -24,8 +27,11 @@ const {
   verifyEmailOtp,
   forgotPassword,
   resetPassword,
+  changePasswordByUserId,
   getProfileByUserId,
   updateProfileByUserId,
+  logoutDeviceByUserId,
+  reportActivityByUserId,
 } = require('./auth.service');
 
 const getRequestContext = (req) => {
@@ -96,7 +102,10 @@ const logoutAll = asyncHandler(async (req, res) => {
 
 const getSessions = asyncHandler(async (req, res) => {
   const query = normalizeListLimitQuery(req.query, 20, 100);
-  const sessions = await getUserActiveSessions(req.auth.userId, query);
+  const sessions = await getUserActiveSessions(req.auth.userId, {
+    ...query,
+    currentSessionId: req.auth.sessionId,
+  });
 
   res.status(200).json({
     success: true,
@@ -179,6 +188,36 @@ const updateProfile = asyncHandler(async (req, res) => {
   });
 });
 
+const changePassword = asyncHandler(async (req, res) => {
+  const payload = normalizeChangePasswordPayload(req.body);
+  const data = await changePasswordByUserId(req.auth.userId, payload, getRequestContext(req));
+
+  res.status(200).json({
+    success: true,
+    data,
+  });
+});
+
+const logoutDevice = asyncHandler(async (req, res) => {
+  const payload = normalizeLogoutDevicePayload(req.body);
+  const data = await logoutDeviceByUserId(req.auth.userId, payload, getRequestContext(req));
+
+  res.status(200).json({
+    success: true,
+    data,
+  });
+});
+
+const reportActivity = asyncHandler(async (req, res) => {
+  const payload = normalizeReportActivityPayload(req.body);
+  const data = await reportActivityByUserId(req.auth.userId, payload, getRequestContext(req));
+
+  res.status(200).json({
+    success: true,
+    data,
+  });
+});
+
 module.exports = {
   signup,
   login,
@@ -194,4 +233,7 @@ module.exports = {
   resetPasswordController,
   getProfile,
   updateProfile,
+  changePassword,
+  logoutDevice,
+  reportActivity,
 };

@@ -1,6 +1,7 @@
 const { ApiError } = require('../../utils/errorHandler');
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const normalizeEmail = (value) => {
   const email = String(value || '').trim().toLowerCase();
@@ -54,6 +55,72 @@ const normalizeOptionalAvatarUrl = (value) => {
   }
 
   return avatarUrl;
+};
+
+const normalizeOptionalGender = (value) => {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  const gender = String(value).trim().toLowerCase();
+  const allowedValues = ['male', 'female', 'non_binary', 'other', 'prefer_not_to_say'];
+  if (!allowedValues.includes(gender)) {
+    throw new ApiError(
+      'gender must be one of: male, female, non_binary, other, prefer_not_to_say',
+      400,
+      'ERR_INVALID_PAYLOAD'
+    );
+  }
+
+  return gender;
+};
+
+const normalizeOptionalDob = (value) => {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  const dob = String(value).trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dob)) {
+    throw new ApiError('dob must be in YYYY-MM-DD format', 400, 'ERR_INVALID_PAYLOAD');
+  }
+
+  const parsed = new Date(`${dob}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new ApiError('dob is invalid', 400, 'ERR_INVALID_PAYLOAD');
+  }
+
+  if (parsed.getTime() > Date.now()) {
+    throw new ApiError('dob cannot be in the future', 400, 'ERR_INVALID_PAYLOAD');
+  }
+
+  return dob;
+};
+
+const normalizeOptionalIncomeRange = (value) => {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  const incomeRange = String(value).trim();
+  if (incomeRange.length > 80) {
+    throw new ApiError('incomeRange must be at most 80 characters', 400, 'ERR_INVALID_PAYLOAD');
+  }
+
+  return incomeRange;
+};
+
+const normalizeOptionalOccupation = (value) => {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  const occupation = String(value).trim();
+  if (occupation.length > 120) {
+    throw new ApiError('occupation must be at most 120 characters', 400, 'ERR_INVALID_PAYLOAD');
+  }
+
+  return occupation;
 };
 
 const normalizeSignupPayload = (body = {}) => {
@@ -157,6 +224,59 @@ const normalizeResetPasswordPayload = (body = {}) => {
   };
 };
 
+const normalizeChangePasswordPayload = (body = {}) => {
+  const oldPassword = normalizePassword(body.oldPassword, 'oldPassword');
+  const newPassword = normalizePassword(body.newPassword, 'newPassword');
+
+  if (oldPassword === newPassword) {
+    throw new ApiError('newPassword must be different from oldPassword', 400, 'ERR_INVALID_PASSWORD');
+  }
+
+  return {
+    oldPassword,
+    newPassword,
+  };
+};
+
+const normalizeLogoutDevicePayload = (body = {}) => {
+  const sessionId = String(body.sessionId || '').trim();
+  if (!UUID_V4_REGEX.test(sessionId)) {
+    throw new ApiError('A valid sessionId is required', 400, 'ERR_INVALID_PAYLOAD');
+  }
+
+  return {
+    sessionId,
+  };
+};
+
+const normalizeReportActivityPayload = (body = {}) => {
+  const type = String(body.type || '').trim().toLowerCase();
+  const message = String(body.message || '').trim();
+  const details = body.details === undefined || body.details === null ? null : body.details;
+
+  if (!type) {
+    throw new ApiError('type is required', 400, 'ERR_INVALID_PAYLOAD');
+  }
+
+  if (type.length > 60) {
+    throw new ApiError('type must be at most 60 characters', 400, 'ERR_INVALID_PAYLOAD');
+  }
+
+  if (!message) {
+    throw new ApiError('message is required', 400, 'ERR_INVALID_PAYLOAD');
+  }
+
+  if (message.length > 1000) {
+    throw new ApiError('message must be at most 1000 characters', 400, 'ERR_INVALID_PAYLOAD');
+  }
+
+  return {
+    type,
+    message,
+    details,
+  };
+};
+
 const normalizeProfileUpdatePayload = (body = {}) => {
   const payload = {};
 
@@ -170,6 +290,22 @@ const normalizeProfileUpdatePayload = (body = {}) => {
 
   if (body.avatarUrl !== undefined) {
     payload.avatarUrl = normalizeOptionalAvatarUrl(body.avatarUrl);
+  }
+
+  if (body.gender !== undefined) {
+    payload.gender = normalizeOptionalGender(body.gender);
+  }
+
+  if (body.dob !== undefined) {
+    payload.dob = normalizeOptionalDob(body.dob);
+  }
+
+  if (body.incomeRange !== undefined) {
+    payload.incomeRange = normalizeOptionalIncomeRange(body.incomeRange);
+  }
+
+  if (body.occupation !== undefined) {
+    payload.occupation = normalizeOptionalOccupation(body.occupation);
   }
 
   if (Object.keys(payload).length === 0) {
@@ -203,6 +339,9 @@ module.exports = {
   normalizeListLimitQuery,
   normalizeForgotPasswordPayload,
   normalizeResetPasswordPayload,
+  normalizeChangePasswordPayload,
+  normalizeLogoutDevicePayload,
+  normalizeReportActivityPayload,
   normalizeProfileUpdatePayload,
   getBearerToken,
 };

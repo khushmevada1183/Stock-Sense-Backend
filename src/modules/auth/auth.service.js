@@ -7,6 +7,7 @@ const { ApiError } = require('../../utils/errorHandler');
 const {
   findUserByEmail,
   findUserById,
+  findUserAuthById,
   createUser,
   updateUserLastLogin,
   updateUserPassword,
@@ -14,10 +15,13 @@ const {
   updateUserProfile,
   createUserSession,
   listActiveSessionsByUserId,
+  findActiveSessionById,
   enforceMaxActiveSessions,
   findActiveSessionByHash,
   revokeUserSessionByHash,
+  revokeActiveSessionById,
   revokeActiveSessionsByUserId,
+  touchUserSessionActivity,
   findOAuthIdentity,
   createOAuthIdentity,
   createPasswordResetToken,
@@ -215,6 +219,19 @@ const buildTokenPayload = (user) => {
   };
 };
 
+const toUserSettingsProfile = (user) => {
+  return {
+    id: user.id,
+    fullName: user.fullName,
+    email: user.email,
+    phone: user.phone,
+    gender: user.gender,
+    dob: user.dob,
+    incomeRange: user.incomeRange,
+    occupation: user.occupation,
+  };
+};
+
 const getThrottleIdentifier = (context = {}) => {
   return String(context.ipAddress || 'unknown').trim().toLowerCase();
 };
@@ -311,13 +328,14 @@ const issueEmailVerificationOtp = async (userId) => {
   };
 };
 
-const issueAuthTokens = (user) => {
+const issueAuthTokens = (user, { sessionId = null } = {}) => {
   const payload = buildTokenPayload(user);
   const accessToken = jwt.sign(
     {
       ...payload,
       tokenType: 'access',
       jti: crypto.randomUUID(),
+      ...(sessionId ? { sid: sessionId } : {}),
     },
     ACCESS_SECRET,
     { expiresIn: ACCESS_EXPIRES_IN }
@@ -327,6 +345,7 @@ const issueAuthTokens = (user) => {
       ...payload,
       tokenType: 'refresh',
       jti: crypto.randomUUID(),
+      ...(sessionId ? { sid: sessionId } : {}),
     },
     REFRESH_SECRET,
     { expiresIn: REFRESH_EXPIRES_IN }
@@ -377,8 +396,10 @@ const registerUser = async (payload, context = {}) => {
   });
   const emailVerification = await issueEmailVerificationOtp(user.id);
 
-  const tokens = issueAuthTokens(user);
+  const sessionId = crypto.randomUUID();
+  const tokens = issueAuthTokens(user, { sessionId });
   await createUserSession({
+    sessionId,
     userId: user.id,
     refreshTokenHash: hashOpaqueToken(tokens.refreshToken),
     userAgent: context.userAgent,
@@ -474,9 +495,11 @@ const loginUser = async (payload, context = {}) => {
   await updateUserLastLogin(user.id);
 
   const profile = await findUserById(user.id);
-  const tokens = issueAuthTokens(profile);
+  const sessionId = crypto.randomUUID();
+  const tokens = issueAuthTokens(profile, { sessionId });
 
   await createUserSession({
+    sessionId,
     userId: profile.id,
     refreshTokenHash: hashOpaqueToken(tokens.refreshToken),
     userAgent: context.userAgent,
@@ -549,9 +572,11 @@ const loginWithOAuth = async (payload, context = {}) => {
 
     await updateUserLastLogin(user.id);
     const profile = await findUserById(user.id);
-    const tokens = issueAuthTokens(profile);
+    const sessionId = crypto.randomUUID();
+    const tokens = issueAuthTokens(profile, { sessionId });
 
     await createUserSession({
+      sessionId,
       userId: profile.id,
       refreshTokenHash: hashOpaqueToken(tokens.refreshToken),
       userAgent: context.userAgent,
@@ -596,15 +621,21 @@ const refreshAuthTokens = async (refreshToken, context = {}) => {
       throw new ApiError('Invalid or expired refresh token', 401, 'ERR_UNAUTHORIZED');
     }
 
+    if (payload.sid && payload.sid !== activeSession.sessionId) {
+      throw new ApiError('Invalid or expired refresh token', 401, 'ERR_UNAUTHORIZED');
+    }
+
     const user = await findUserById(activeSession.userId);
     if (!user || !user.isActive) {
       throw new ApiError('Invalid or expired refresh token', 401, 'ERR_UNAUTHORIZED');
     }
 
-    const tokens = issueAuthTokens(user);
+    const nextSessionId = crypto.randomUUID();
+    const tokens = issueAuthTokens(user, { sessionId: nextSessionId });
 
     await revokeUserSessionByHash(refreshTokenHash);
     await createUserSession({
+      sessionId: nextSessionId,
       userId: user.id,
       refreshTokenHash: hashOpaqueToken(tokens.refreshToken),
       userAgent: context.userAgent,
@@ -823,8 +854,114 @@ const logoutAllUserSessions = async (userId, context = {}) => {
   };
 };
 
-const getUserActiveSessions = async (userId, { limit = 20 } = {}) => {
-  return listActiveSessionsByUserId(userId, { limit: toPositiveInt(limit, 20) });
+const getSessionDeviceName = (userAgent) => {
+  const ua = String(userAgent || '').toLowerCase();
+  if (!ua) {
+    return 'Unknown Device';
+  }
+
+  let browser = 'Unknown Browser';
+  if (ua.includes('edg/')) browser = 'Edge';
+  else if (ua.includes('chrome/')) browser = 'Chrome';
+  else if (ua.includes('firefox/')) browser = 'Firefox';
+  else if (ua.includes('safari/') && !ua.includes('chrome/')) browser = 'Safari';
+
+  let os = 'Unknown OS';
+  if (ua.includes('windows')) os = 'Windows';
+  else if (ua.includes('android')) os = 'Android';
+  else if (ua.includes('iphone') || ua.includes('ipad') || ua.includes('ios')) os = 'iOS';
+  else if (ua.includes('mac os') || ua.includes('macintosh')) os = 'macOS';
+  else if (ua.includes('linux')) os = 'Linux';
+
+  return `${browser} on ${os}`;
+};
+
+const changePasswordByUserId = async (userId, { oldPassword, newPassword }, context = {}) => {
+  const user = await findUserAuthById(userId);
+
+  if (!user || !user.isActive) {
+    throw new ApiError('User not found', 404, 'ERR_USER_NOT_FOUND');
+  }
+
+  const isCurrentPasswordValid = await bcrypt.compare(oldPassword, user.passwordHash);
+  if (!isCurrentPasswordValid) {
+    await logAuthEvent({
+      userId,
+      eventType: 'change_password',
+      eventStatus: 'failure',
+      context,
+      metadata: { reason: 'invalid_current_password' },
+    });
+    throw new ApiError('Current password is incorrect', 400, 'ERR_INVALID_CURRENT_PASSWORD');
+  }
+
+  if (oldPassword === newPassword) {
+    throw new ApiError('newPassword must be different from oldPassword', 400, 'ERR_INVALID_PASSWORD');
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, BCRYPT_SALT_ROUNDS);
+  await updateUserPassword(userId, passwordHash);
+  await revokeActiveSessionsByUserId(userId);
+  await logAuthEvent({
+    userId,
+    eventType: 'change_password',
+    context,
+  });
+
+  return {
+    success: true,
+    message: 'Password changed successfully. Please sign in again.',
+  };
+};
+
+const logoutDeviceByUserId = async (userId, { sessionId }, context = {}) => {
+  const session = await findActiveSessionById({ sessionId, userId });
+  if (!session) {
+    throw new ApiError('Session not found', 404, 'ERR_SESSION_NOT_FOUND');
+  }
+
+  await revokeActiveSessionById({ sessionId, userId });
+  await logAuthEvent({
+    userId,
+    eventType: 'logout_device',
+    context,
+    metadata: { sessionId },
+  });
+
+  return {
+    success: true,
+    message: 'Device session revoked.',
+  };
+};
+
+const reportActivityByUserId = async (userId, payload, context = {}) => {
+  await logAuthEvent({
+    userId,
+    eventType: 'report_activity',
+    context,
+    metadata: {
+      type: payload.type,
+      message: payload.message,
+      details: payload.details,
+    },
+  });
+
+  return {
+    success: true,
+    message: 'Activity report submitted.',
+  };
+};
+
+const getUserActiveSessions = async (userId, { limit = 20, currentSessionId = null } = {}) => {
+  const sessions = await listActiveSessionsByUserId(userId, { limit: toPositiveInt(limit, 20) });
+
+  return sessions.map((session) => ({
+    sessionId: session.id,
+    deviceName: getSessionDeviceName(session.userAgent),
+    ipAddress: session.ipAddress || null,
+    lastActivity: session.lastUsedAt || session.createdAt,
+    currentSession: currentSessionId ? session.id === currentSessionId : false,
+  }));
 };
 
 const getUserAuthAuditLogs = async (userId, { limit = 50 } = {}) => {
@@ -833,10 +970,39 @@ const getUserAuthAuditLogs = async (userId, { limit = 50 } = {}) => {
 
 const verifyAccessToken = (token) => {
   try {
-    return jwt.verify(token, ACCESS_SECRET);
+    const payload = jwt.verify(token, ACCESS_SECRET);
+    if (payload?.tokenType !== 'access') {
+      throw new ApiError('Invalid or expired access token', 401, 'ERR_UNAUTHORIZED');
+    }
+    return payload;
   } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
     throw new ApiError('Invalid or expired access token', 401, 'ERR_UNAUTHORIZED');
   }
+};
+
+const assertActiveAccessSession = async (payload) => {
+  if (!payload?.sid) {
+    return null;
+  }
+
+  const session = await findActiveSessionById({
+    sessionId: payload.sid,
+    userId: payload.sub,
+  });
+
+  if (!session) {
+    throw new ApiError('Session expired or revoked', 401, 'ERR_SESSION_INVALID');
+  }
+
+  await touchUserSessionActivity({
+    sessionId: payload.sid,
+    userId: payload.sub,
+  });
+
+  return session;
 };
 
 const getProfileByUserId = async (userId) => {
@@ -844,7 +1010,11 @@ const getProfileByUserId = async (userId) => {
   if (!user || !user.isActive) {
     throw new ApiError('User not found', 404, 'ERR_USER_NOT_FOUND');
   }
-  return user;
+  const settingsProfile = toUserSettingsProfile(user);
+  return {
+    ...user,
+    user: settingsProfile,
+  };
 };
 
 const updateProfileByUserId = async (userId, payload) => {
@@ -852,7 +1022,20 @@ const updateProfileByUserId = async (userId, payload) => {
   if (!user || !user.isActive) {
     throw new ApiError('User not found', 404, 'ERR_USER_NOT_FOUND');
   }
-  return user;
+  await logAuthEvent({
+    userId,
+    eventType: 'profile_update',
+    metadata: {
+      fields: Object.keys(payload),
+    },
+  });
+
+  const settingsProfile = toUserSettingsProfile(user);
+
+  return {
+    ...user,
+    user: settingsProfile,
+  };
 };
 
 module.exports = {
@@ -861,14 +1044,18 @@ module.exports = {
   loginWithOAuth,
   logoutUser,
   logoutAllUserSessions,
+  logoutDeviceByUserId,
   getUserActiveSessions,
   getUserAuthAuditLogs,
   resendEmailVerificationOtp,
   verifyEmailOtp,
   forgotPassword,
   resetPassword,
+  changePasswordByUserId,
+  reportActivityByUserId,
   refreshAuthTokens,
   verifyAccessToken,
+  assertActiveAccessSession,
   getProfileByUserId,
   updateProfileByUserId,
 };

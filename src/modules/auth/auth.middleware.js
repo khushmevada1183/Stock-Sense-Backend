@@ -1,17 +1,19 @@
 const asyncHandler = require('../../shared/middleware/asyncHandler');
 const { ApiError } = require('../../utils/errorHandler');
 const { getBearerToken } = require('./auth.validation');
-const { verifyAccessToken } = require('./auth.service');
+const { verifyAccessToken, assertActiveAccessSession } = require('./auth.service');
 
 const requireAuth = asyncHandler(async (req, res, next) => {
   const token = getBearerToken(req.headers.authorization);
   const payload = verifyAccessToken(token);
+  await assertActiveAccessSession(payload);
 
   req.auth = {
     userId: payload.sub,
     email: payload.email,
     role: payload.role,
     fullName: payload.fullName,
+    sessionId: payload.sid || null,
   };
 
   next();
