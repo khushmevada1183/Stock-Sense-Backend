@@ -11,6 +11,7 @@ const {
   resendEmailVerification,
   verifyEmail,
   forgotPasswordController,
+  verifyResetCodeController,
   resetPasswordController,
   getProfile,
   updateProfile,
@@ -32,6 +33,7 @@ router.post('/logout-device', requireAuth, logoutDevice);
 router.post('/resend-verification', resendEmailVerification);
 router.post('/verify-email', verifyEmail);
 router.post('/forgot-password', forgotPasswordController);
+router.post('/verify-reset-code', verifyResetCodeController);
 router.post('/reset-password', resetPasswordController);
 router.post('/change-password', requireAuth, changePassword);
 router.post('/report-activity', requireAuth, reportActivity);

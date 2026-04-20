@@ -6,6 +6,7 @@ const {
   normalizeRefreshPayload,
   normalizeResendEmailVerificationPayload,
   normalizeEmailVerificationPayload,
+  normalizeVerifyResetCodePayload,
   normalizeListLimitQuery,
   normalizeForgotPasswordPayload,
   normalizeResetPasswordPayload,
@@ -26,6 +27,7 @@ const {
   resendEmailVerificationOtp,
   verifyEmailOtp,
   forgotPassword,
+  verifyResetCode,
   resetPassword,
   changePasswordByUserId,
   getProfileByUserId,
@@ -159,6 +161,16 @@ const forgotPasswordController = asyncHandler(async (req, res) => {
   });
 });
 
+const verifyResetCodeController = asyncHandler(async (req, res) => {
+  const payload = normalizeVerifyResetCodePayload(req.body);
+  const data = await verifyResetCode(payload);
+
+  res.status(200).json({
+    success: true,
+    data,
+  });
+});
+
 const resetPasswordController = asyncHandler(async (req, res) => {
   const payload = normalizeResetPasswordPayload(req.body);
   const data = await resetPassword(payload);
@@ -230,6 +242,7 @@ module.exports = {
   resendEmailVerification,
   verifyEmail,
   forgotPasswordController,
+  verifyResetCodeController,
   resetPasswordController,
   getProfile,
   updateProfile,

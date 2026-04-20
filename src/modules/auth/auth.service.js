@@ -4,6 +4,12 @@ const crypto = require('crypto');
 const { OAuth2Client } = require('google-auth-library');
 const jwt = require('jsonwebtoken');
 const { ApiError } = require('../../utils/errorHandler');
+const { sendEmail } = require('../../services/email/email.service');
+const {
+  buildEmailVerificationOtpTemplate,
+  buildPasswordResetCodeTemplate,
+  buildLoginSecurityAlertTemplate,
+} = require('../../services/email/email.templates');
 const {
   findUserByEmail,
   findUserById,
@@ -25,7 +31,10 @@ const {
   findOAuthIdentity,
   createOAuthIdentity,
   createPasswordResetToken,
-  consumePasswordResetToken,
+  findPasswordResetTokenByHash,
+  createPasswordResetSessionToken,
+  consumePasswordResetSessionToken,
+  revokeActivePasswordResetTokensByUserId,
   createEmailVerificationToken,
   consumeEmailVerificationToken,
   revokeActiveEmailVerificationTokensByUserId,
@@ -41,11 +50,29 @@ const toPositiveInt = (value, fallback) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };
 
+const toBoolean = (value, fallback) => {
+  if (value === undefined || value === null || value === '') {
+    return fallback;
+  }
+
+  const normalized = String(value).trim().toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) {
+    return true;
+  }
+
+  if (['0', 'false', 'no', 'off'].includes(normalized)) {
+    return false;
+  }
+
+  return fallback;
+};
+
 const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || 'dev-access-secret-change-me';
 const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'dev-refresh-secret-change-me';
 const ACCESS_EXPIRES_IN = process.env.JWT_ACCESS_EXPIRES_IN || '15m';
 const REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
 const RESET_EXPIRES_MINUTES = Number.parseInt(process.env.PASSWORD_RESET_TOKEN_EXPIRES_MINUTES || '30', 10);
+const RESET_SESSION_EXPIRES_MINUTES = toPositiveInt(process.env.PASSWORD_RESET_SESSION_EXPIRES_MINUTES, 15);
 const EMAIL_VERIFICATION_OTP_EXPIRES_MINUTES = toPositiveInt(
   process.env.EMAIL_VERIFICATION_OTP_EXPIRES_MINUTES,
   10
@@ -54,8 +81,9 @@ const BCRYPT_SALT_ROUNDS = Number.parseInt(process.env.BCRYPT_SALT_ROUNDS || '12
 const LOGIN_MAX_ATTEMPTS = toPositiveInt(process.env.AUTH_LOGIN_MAX_ATTEMPTS, 5);
 const LOGIN_WINDOW_MINUTES = toPositiveInt(process.env.AUTH_LOGIN_WINDOW_MINUTES, 15);
 const LOGIN_BLOCK_MINUTES = toPositiveInt(process.env.AUTH_LOGIN_BLOCK_MINUTES, 60);
-const EXPOSE_RESET_TOKEN =
-  String(process.env.AUTH_EXPOSE_RESET_TOKEN || '').toLowerCase() === 'true' ||
+const EXPOSE_RESET_CODE =
+  String(process.env.AUTH_EXPOSE_RESET_CODE || process.env.AUTH_EXPOSE_RESET_TOKEN || '').toLowerCase() ===
+    'true' ||
   (process.env.NODE_ENV || 'development') !== 'production';
 const EXPOSE_EMAIL_VERIFICATION_OTP =
   String(process.env.AUTH_EXPOSE_EMAIL_VERIFICATION_OTP || '').toLowerCase() === 'true' ||
@@ -63,12 +91,18 @@ const EXPOSE_EMAIL_VERIFICATION_OTP =
 const REQUIRE_EMAIL_VERIFIED_FOR_LOGIN =
   String(process.env.AUTH_REQUIRE_EMAIL_VERIFIED_FOR_LOGIN || 'false').toLowerCase() === 'true';
 const AUTH_MAX_ACTIVE_SESSIONS = toPositiveInt(process.env.AUTH_MAX_ACTIVE_SESSIONS, 5);
+const SEND_EMAIL_VERIFICATION_OTP = toBoolean(process.env.AUTH_SEND_EMAIL_VERIFICATION_OTP, true);
+const SEND_PASSWORD_RESET_CODE = toBoolean(process.env.AUTH_SEND_PASSWORD_RESET_CODE, true);
+const SEND_LOGIN_ALERT_EMAIL = toBoolean(process.env.AUTH_LOGIN_ALERT_EMAIL_ENABLED, false);
 const GOOGLE_OAUTH_CLIENT_ID = String(process.env.GOOGLE_OAUTH_CLIENT_ID || '').trim();
 const FACEBOOK_APP_ID = String(process.env.FACEBOOK_APP_ID || '').trim();
 const FACEBOOK_APP_SECRET = String(process.env.FACEBOOK_APP_SECRET || '').trim();
 
 const LOGIN_ATTEMPT_SCOPE = 'ip';
 const OAUTH_SUPPORTED_PROVIDERS = ['google', 'facebook'];
+const PASSWORD_RESET_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const PASSWORD_RESET_CODE_LENGTH = 8;
+const PASSWORD_RESET_CODE_MAX_RETRIES = 6;
 
 const googleOauthClient = GOOGLE_OAUTH_CLIENT_ID ? new OAuth2Client(GOOGLE_OAUTH_CLIENT_ID) : null;
 
@@ -78,6 +112,40 @@ const hashOpaqueToken = (token) => {
 
 const generateSixDigitOtp = () => {
   return String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+};
+
+const generatePasswordResetCode = () => {
+  const bytes = crypto.randomBytes(PASSWORD_RESET_CODE_LENGTH);
+  let code = '';
+
+  for (let index = 0; index < PASSWORD_RESET_CODE_LENGTH; index += 1) {
+    code += PASSWORD_RESET_CODE_ALPHABET[bytes[index] % PASSWORD_RESET_CODE_ALPHABET.length];
+  }
+
+  return code;
+};
+
+const getPasswordResetCodeHash = ({ email, resetCode }) => {
+  return hashOpaqueToken(`password-reset:${String(email || '').toLowerCase()}:${String(resetCode || '').toUpperCase()}`);
+};
+
+const generatePasswordResetSessionToken = () => {
+  return crypto.randomBytes(32).toString('base64url');
+};
+
+const getPasswordResetSessionTokenHash = (resetToken) => {
+  return hashOpaqueToken(`password-reset-session:${String(resetToken || '').trim()}`);
+};
+
+const resolveResetSessionExpiry = (codeExpiresAtIso) => {
+  const fallbackExpiryMs = Date.now() + RESET_SESSION_EXPIRES_MINUTES * 60 * 1000;
+  const codeExpiryMs = new Date(codeExpiresAtIso).getTime();
+
+  if (!Number.isFinite(codeExpiryMs)) {
+    return new Date(fallbackExpiryMs).toISOString();
+  }
+
+  return new Date(Math.min(codeExpiryMs, fallbackExpiryMs)).toISOString();
 };
 
 const logAuthEvent = async ({
@@ -105,6 +173,121 @@ const enforceSessionPolicy = async (userId) => {
   await enforceMaxActiveSessions({
     userId,
     maxActiveSessions: AUTH_MAX_ACTIVE_SESSIONS,
+  });
+};
+
+const resolveMinutesUntil = (expiresAtIso, fallbackMinutes) => {
+  const expiresAtMs = new Date(expiresAtIso).getTime();
+  if (!Number.isFinite(expiresAtMs)) {
+    return fallbackMinutes;
+  }
+
+  const deltaMs = expiresAtMs - Date.now();
+  if (deltaMs <= 0) {
+    return 1;
+  }
+
+  return Math.max(1, Math.ceil(deltaMs / 60000));
+};
+
+const sendAuthEmailSafely = async ({
+  purpose,
+  templateName = null,
+  to,
+  userId,
+  subject,
+  text,
+  html,
+  idempotencyKey = null,
+  metadata = {},
+}) => {
+  try {
+    const tags = [
+      { name: 'channel', value: 'auth' },
+      { name: 'purpose', value: purpose },
+    ];
+
+    if (templateName) {
+      tags.push({ name: 'template', value: templateName });
+    }
+
+    const result = await sendEmail({
+      to,
+      subject,
+      text,
+      html,
+      idempotencyKey,
+      tags,
+      metadata: {
+        ...metadata,
+        purpose,
+        templateName,
+        userId,
+      },
+    });
+
+    return {
+      sent: true,
+      provider: result.provider,
+      providerMessageId: result.providerMessageId,
+    };
+  } catch (error) {
+    console.error(
+      `[AUTH_EMAIL] purpose=${purpose} userId=${userId || 'n/a'} delivery failed: ${error.message}`
+    );
+
+    return {
+      sent: false,
+      error: error.message,
+    };
+  }
+};
+
+const normalizeDeviceFingerprint = ({ userAgent, ipAddress }) => {
+  const normalizedUserAgent = String(userAgent || '').trim().toLowerCase();
+  const normalizedIpAddress = String(ipAddress || '').trim().toLowerCase();
+  return `${normalizedUserAgent}::${normalizedIpAddress}`;
+};
+
+const maybeSendLoginSecurityAlert = async ({ user, context, existingSessions = [] }) => {
+  if (!SEND_LOGIN_ALERT_EMAIL || !user?.email) {
+    return;
+  }
+
+  if (!Array.isArray(existingSessions) || existingSessions.length === 0) {
+    return;
+  }
+
+  const currentFingerprint = normalizeDeviceFingerprint(context || {});
+  const knownDevice = existingSessions.some((session) => {
+    return (
+      normalizeDeviceFingerprint({
+        userAgent: session.userAgent,
+        ipAddress: session.ipAddress,
+      }) === currentFingerprint
+    );
+  });
+
+  if (knownDevice) {
+    return;
+  }
+
+  const template = buildLoginSecurityAlertTemplate({
+    fullName: user.fullName,
+    ipAddress: context?.ipAddress,
+    userAgent: context?.userAgent,
+    occurredAt: new Date().toISOString(),
+  });
+
+  await sendAuthEmailSafely({
+    purpose: 'login_security_alert',
+    templateName: template.name,
+    to: user.email,
+    userId: user.id,
+    subject: template.subject,
+    text: template.text,
+    html: template.html,
+    idempotencyKey: `login-security-alert/${user.id}/${Date.now()}`,
   });
 };
 
@@ -308,7 +491,7 @@ const clearLoginFailures = async (identifier) => {
   });
 };
 
-const issueEmailVerificationOtp = async (userId) => {
+const issueEmailVerificationOtp = async ({ userId, email, fullName }) => {
   const verificationOtp = generateSixDigitOtp();
   const otpHash = hashOpaqueToken(`email-verify:${verificationOtp}`);
   const expiresAt = new Date(
@@ -322,10 +505,79 @@ const issueEmailVerificationOtp = async (userId) => {
     expiresAt,
   });
 
+  if (SEND_EMAIL_VERIFICATION_OTP && email) {
+    const template = buildEmailVerificationOtpTemplate({
+      fullName,
+      verificationOtp,
+      expiresInMinutes: resolveMinutesUntil(expiresAt, EMAIL_VERIFICATION_OTP_EXPIRES_MINUTES),
+    });
+
+    await sendAuthEmailSafely({
+      purpose: 'email_verification_otp',
+      templateName: template.name,
+      to: email,
+      userId,
+      subject: template.subject,
+      text: template.text,
+      html: template.html,
+      idempotencyKey: `email-verification-otp/${userId}/${verificationOtp}`,
+      metadata: {
+        expiresAt,
+      },
+    });
+  }
+
   return {
     expiresAt,
     ...(EXPOSE_EMAIL_VERIFICATION_OTP ? { verificationOtp } : {}),
   };
+};
+
+const issuePasswordResetCode = async ({ userId, email, fullName }) => {
+  const expiresAt = new Date(Date.now() + RESET_EXPIRES_MINUTES * 60 * 1000).toISOString();
+
+  await revokeActivePasswordResetTokensByUserId(userId);
+
+  for (let attempt = 0; attempt < PASSWORD_RESET_CODE_MAX_RETRIES; attempt += 1) {
+    const resetCode = generatePasswordResetCode();
+    const tokenHash = getPasswordResetCodeHash({ email, resetCode });
+    const createdToken = await createPasswordResetToken({
+      userId,
+      tokenHash,
+      expiresAt,
+    });
+
+    if (createdToken) {
+      if (SEND_PASSWORD_RESET_CODE && email) {
+        const template = buildPasswordResetCodeTemplate({
+          fullName,
+          resetCode,
+          expiresInMinutes: resolveMinutesUntil(expiresAt, RESET_EXPIRES_MINUTES),
+        });
+
+        await sendAuthEmailSafely({
+          purpose: 'password_reset_code',
+          templateName: template.name,
+          to: email,
+          userId,
+          subject: template.subject,
+          text: template.text,
+          html: template.html,
+          idempotencyKey: `password-reset-code/${userId}/${resetCode}`,
+          metadata: {
+            expiresAt,
+          },
+        });
+      }
+
+      return {
+        resetCode,
+        expiresAt,
+      };
+    }
+  }
+
+  throw new ApiError('Unable to generate reset code right now. Please try again.', 503, 'ERR_RESET_CODE_UNAVAILABLE');
 };
 
 const issueAuthTokens = (user, { sessionId = null } = {}) => {
@@ -394,7 +646,11 @@ const registerUser = async (payload, context = {}) => {
     fullName: payload.fullName,
     phone: payload.phone,
   });
-  const emailVerification = await issueEmailVerificationOtp(user.id);
+  const emailVerification = await issueEmailVerificationOtp({
+    userId: user.id,
+    email: user.email,
+    fullName: user.fullName,
+  });
 
   const sessionId = crypto.randomUUID();
   const tokens = issueAuthTokens(user, { sessionId });
@@ -495,6 +751,9 @@ const loginUser = async (payload, context = {}) => {
   await updateUserLastLogin(user.id);
 
   const profile = await findUserById(user.id);
+  const existingSessions = await listActiveSessionsByUserId(profile.id, {
+    limit: AUTH_MAX_ACTIVE_SESSIONS,
+  });
   const sessionId = crypto.randomUUID();
   const tokens = issueAuthTokens(profile, { sessionId });
 
@@ -512,6 +771,11 @@ const loginUser = async (payload, context = {}) => {
     eventType: 'login',
     context,
     metadata: { method: 'email_password' },
+  });
+  await maybeSendLoginSecurityAlert({
+    user: profile,
+    context,
+    existingSessions,
   });
 
   return {
@@ -572,6 +836,9 @@ const loginWithOAuth = async (payload, context = {}) => {
 
     await updateUserLastLogin(user.id);
     const profile = await findUserById(user.id);
+    const existingSessions = await listActiveSessionsByUserId(profile.id, {
+      limit: AUTH_MAX_ACTIVE_SESSIONS,
+    });
     const sessionId = crypto.randomUUID();
     const tokens = issueAuthTokens(profile, { sessionId });
 
@@ -590,6 +857,11 @@ const loginWithOAuth = async (payload, context = {}) => {
       eventType: 'oauth_login',
       context,
       metadata: { provider: oauthProfile.provider },
+    });
+    await maybeSendLoginSecurityAlert({
+      user: profile,
+      context,
+      existingSessions,
     });
 
     return {
@@ -703,19 +975,16 @@ const forgotPassword = async ({ email }) => {
     });
     return {
       success: true,
-      message: 'If the account exists, a password reset token has been generated.',
+      message: 'If the account exists, a password reset code has been generated.',
     };
   }
 
-  const rawToken = crypto.randomBytes(32).toString('hex');
-  const tokenHash = hashOpaqueToken(rawToken);
-  const expiresAt = new Date(Date.now() + RESET_EXPIRES_MINUTES * 60 * 1000).toISOString();
-
-  await createPasswordResetToken({
+  const passwordResetCode = await issuePasswordResetCode({
     userId: user.id,
-    tokenHash,
-    expiresAt,
+    email,
+    fullName: user.fullName,
   });
+
   await logAuthEvent({
     userId: user.id,
     eventType: 'forgot_password',
@@ -724,17 +993,86 @@ const forgotPassword = async ({ email }) => {
 
   return {
     success: true,
-    message: 'Password reset token generated.',
-    expiresAt,
-    ...(EXPOSE_RESET_TOKEN ? { resetToken: rawToken } : {}),
+    message: 'If the account exists, a password reset code has been generated.',
+    expiresAt: passwordResetCode.expiresAt,
+    ...(EXPOSE_RESET_CODE ? { resetCode: passwordResetCode.resetCode } : {}),
   };
 };
 
-const resetPassword = async ({ token, newPassword }) => {
-  const tokenHash = hashOpaqueToken(token);
-  const consumed = await consumePasswordResetToken(tokenHash);
+const verifyResetCode = async ({ email, resetCode }) => {
+  const user = await findUserByEmail(email);
+
+  if (!user || !user.isActive) {
+    await logAuthEvent({
+      eventType: 'verify_reset_code',
+      eventStatus: 'failure',
+      metadata: { email, reason: 'user_not_found' },
+    });
+    throw new ApiError('Reset code is invalid or expired', 400, 'ERR_INVALID_RESET_CODE');
+  }
+
+  const tokenHash = getPasswordResetCodeHash({ email, resetCode });
+  const matchingCode = await findPasswordResetTokenByHash({
+    userId: user.id,
+    tokenHash,
+  });
+
+  if (!matchingCode) {
+    await logAuthEvent({
+      userId: user.id,
+      eventType: 'verify_reset_code',
+      eventStatus: 'failure',
+      metadata: { email, reason: 'invalid_code' },
+    });
+    throw new ApiError('Reset code is invalid or expired', 400, 'ERR_INVALID_RESET_CODE');
+  }
+
+  const resetToken = generatePasswordResetSessionToken();
+  const resetSession = await createPasswordResetSessionToken({
+    userId: user.id,
+    tokenHash,
+    sessionTokenHash: getPasswordResetSessionTokenHash(resetToken),
+    sessionExpiresAt: resolveResetSessionExpiry(matchingCode.expires_at),
+  });
+
+  if (!resetSession) {
+    await logAuthEvent({
+      userId: user.id,
+      eventType: 'verify_reset_code',
+      eventStatus: 'failure',
+      metadata: { email, reason: 'session_issue' },
+    });
+    throw new ApiError('Reset code is invalid or expired', 400, 'ERR_INVALID_RESET_CODE');
+  }
+
+  await logAuthEvent({
+    userId: user.id,
+    eventType: 'verify_reset_code',
+    metadata: {
+      email,
+      sessionExpiresAt: resetSession.reset_session_expires_at,
+    },
+  });
+
+  return {
+    success: true,
+    message: 'Reset code verified successfully.',
+    resetToken,
+    expiresAt: resetSession.reset_session_expires_at,
+  };
+};
+
+const resetPassword = async ({ resetToken, newPassword }) => {
+  const consumed = await consumePasswordResetSessionToken({
+    sessionTokenHash: getPasswordResetSessionTokenHash(resetToken),
+  });
 
   if (!consumed) {
+    await logAuthEvent({
+      eventType: 'reset_password',
+      eventStatus: 'failure',
+      metadata: { reason: 'invalid_token' },
+    });
     throw new ApiError('Reset token is invalid or expired', 400, 'ERR_INVALID_RESET_TOKEN');
   }
 
@@ -744,6 +1082,7 @@ const resetPassword = async ({ token, newPassword }) => {
   await logAuthEvent({
     userId: consumed.user_id,
     eventType: 'reset_password',
+    metadata: { method: 'verified_code_token' },
   });
 
   return {
@@ -779,7 +1118,11 @@ const resendEmailVerificationOtp = async ({ email }) => {
     };
   }
 
-  const emailVerification = await issueEmailVerificationOtp(user.id);
+  const emailVerification = await issueEmailVerificationOtp({
+    userId: user.id,
+    email: user.email,
+    fullName: user.fullName,
+  });
   await logAuthEvent({
     userId: user.id,
     eventType: 'resend_verification',
@@ -1050,6 +1393,7 @@ module.exports = {
   resendEmailVerificationOtp,
   verifyEmailOtp,
   forgotPassword,
+  verifyResetCode,
   resetPassword,
   changePasswordByUserId,
   reportActivityByUserId,

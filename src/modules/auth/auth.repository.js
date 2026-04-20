@@ -497,29 +497,117 @@ const createOAuthIdentity = async ({ userId, provider, providerUserId, providerE
 };
 
 const createPasswordResetToken = async ({ userId, tokenHash, expiresAt }) => {
-  await query(
+  const result = await query(
     `
       INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
-      VALUES ($1::uuid, $2, $3::timestamptz);
+      VALUES ($1::uuid, $2, $3::timestamptz)
+      ON CONFLICT (token_hash)
+      DO NOTHING
+      RETURNING id::text AS id;
     `,
     [userId, tokenHash, expiresAt]
   );
+
+  return result.rows[0] || null;
 };
 
-const consumePasswordResetToken = async (tokenHash) => {
+const findPasswordResetTokenByHash = async ({ userId, tokenHash }) => {
   const result = await query(
     `
-      UPDATE password_reset_tokens
-      SET used_at = NOW()
-      WHERE token_hash = $1
+      SELECT
+        id::text AS id,
+        user_id::text AS user_id,
+        expires_at AS expires_at
+      FROM password_reset_tokens
+      WHERE user_id = $1::uuid
+        AND token_hash = $2
         AND used_at IS NULL
         AND expires_at > NOW()
-      RETURNING user_id::text AS user_id;
+      ORDER BY created_at DESC
+      LIMIT 1;
     `,
-    [tokenHash]
+    [userId, tokenHash]
   );
 
   return result.rows[0] || null;
+};
+
+const createPasswordResetSessionToken = async ({
+  userId,
+  tokenHash,
+  sessionTokenHash,
+  sessionExpiresAt,
+}) => {
+  const result = await query(
+    `
+      WITH candidate AS (
+        SELECT id
+        FROM password_reset_tokens
+        WHERE user_id = $1::uuid
+          AND token_hash = $2
+          AND used_at IS NULL
+          AND expires_at > NOW()
+        ORDER BY created_at DESC
+        LIMIT 1
+      )
+      UPDATE password_reset_tokens
+      SET
+        reset_session_token_hash = $3,
+        reset_session_expires_at = $4::timestamptz,
+        verified_at = NOW()
+      WHERE id IN (SELECT id FROM candidate)
+      RETURNING
+        id::text AS id,
+        user_id::text AS user_id,
+        reset_session_expires_at AS reset_session_expires_at;
+    `,
+    [userId, tokenHash, sessionTokenHash, sessionExpiresAt]
+  );
+
+  return result.rows[0] || null;
+};
+
+const consumePasswordResetSessionToken = async ({ sessionTokenHash }) => {
+  const result = await query(
+    `
+      WITH candidate AS (
+        SELECT id
+        FROM password_reset_tokens
+        WHERE reset_session_token_hash = $1
+          AND used_at IS NULL
+          AND reset_session_expires_at > NOW()
+          AND expires_at > NOW()
+        ORDER BY created_at DESC
+        LIMIT 1
+      )
+      UPDATE password_reset_tokens
+      SET
+        used_at = NOW(),
+        reset_session_token_hash = NULL,
+        reset_session_expires_at = NULL
+      WHERE id IN (SELECT id FROM candidate)
+      RETURNING user_id::text AS user_id;
+    `,
+    [sessionTokenHash]
+  );
+
+  return result.rows[0] || null;
+};
+
+const revokeActivePasswordResetTokensByUserId = async (userId) => {
+  await query(
+    `
+      UPDATE password_reset_tokens
+      SET
+        used_at = NOW(),
+        reset_session_token_hash = NULL,
+        reset_session_expires_at = NULL
+      WHERE user_id = $1::uuid
+        AND used_at IS NULL
+        AND expires_at > NOW();
+    `,
+    [userId]
+  );
 };
 
 const createEmailVerificationToken = async ({ userId, otpHash, expiresAt }) => {
@@ -710,7 +798,10 @@ module.exports = {
   findOAuthIdentity,
   createOAuthIdentity,
   createPasswordResetToken,
-  consumePasswordResetToken,
+  findPasswordResetTokenByHash,
+  createPasswordResetSessionToken,
+  consumePasswordResetSessionToken,
+  revokeActivePasswordResetTokensByUserId,
   createEmailVerificationToken,
   consumeEmailVerificationToken,
   revokeActiveEmailVerificationTokensByUserId,

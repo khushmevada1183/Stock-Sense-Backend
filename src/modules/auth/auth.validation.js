@@ -2,6 +2,7 @@ const { ApiError } = require('../../utils/errorHandler');
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const RESET_CODE_REGEX = /^[A-HJ-NP-Z2-9]{8}$/;
 
 const normalizeEmail = (value) => {
   const email = String(value || '').trim().toLowerCase();
@@ -20,6 +21,28 @@ const normalizePassword = (value, fieldName = 'password') => {
     throw new ApiError(`${fieldName} must be at most 128 characters`, 400, 'ERR_INVALID_PASSWORD');
   }
   return password;
+};
+
+const normalizeResetCode = (value) => {
+  const resetCode = String(value || '').trim().toUpperCase();
+  if (!RESET_CODE_REGEX.test(resetCode)) {
+    throw new ApiError('resetCode must be an 8-character code', 400, 'ERR_INVALID_RESET_CODE');
+  }
+
+  return resetCode;
+};
+
+const normalizeResetToken = (value) => {
+  const resetToken = String(value || '').trim();
+  if (!resetToken || resetToken.length < 32) {
+    throw new ApiError('A valid resetToken is required', 400, 'ERR_INVALID_RESET_TOKEN');
+  }
+
+  if (resetToken.length > 512) {
+    throw new ApiError('resetToken must be at most 512 characters', 400, 'ERR_INVALID_RESET_TOKEN');
+  }
+
+  return resetToken;
 };
 
 const normalizeFullName = (value) => {
@@ -212,14 +235,16 @@ const normalizeEmailVerificationPayload = (body = {}) => {
   };
 };
 
-const normalizeResetPasswordPayload = (body = {}) => {
-  const token = String(body.token || '').trim();
-  if (!token || token.length < 20) {
-    throw new ApiError('A valid reset token is required', 400, 'ERR_INVALID_RESET_TOKEN');
-  }
-
+const normalizeVerifyResetCodePayload = (body = {}) => {
   return {
-    token,
+    email: normalizeEmail(body.email),
+    resetCode: normalizeResetCode(body.resetCode),
+  };
+};
+
+const normalizeResetPasswordPayload = (body = {}) => {
+  return {
+    resetToken: normalizeResetToken(body.resetToken),
     newPassword: normalizePassword(body.newPassword, 'newPassword'),
   };
 };
@@ -336,6 +361,7 @@ module.exports = {
   normalizeRefreshPayload,
   normalizeResendEmailVerificationPayload,
   normalizeEmailVerificationPayload,
+  normalizeVerifyResetCodePayload,
   normalizeListLimitQuery,
   normalizeForgotPasswordPayload,
   normalizeResetPasswordPayload,

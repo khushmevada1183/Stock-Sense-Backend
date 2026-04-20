@@ -1,4 +1,6 @@
 const { findUsersByIds } = require('../auth/auth.repository');
+const { sendEmail, resolveEmailProvider } = require('../../services/email/email.service');
+const { buildNotificationAlertTemplate } = require('../../services/email/email.templates');
 const {
   createNotificationDeliveries,
   listNotificationDeliveriesByUser,
@@ -31,15 +33,21 @@ const formatNumber = (value) => {
 
 const DELIVERY_CHANNELS = new Set(['email', 'push']);
 
-const EMAIL_MODE = String(process.env.NOTIFICATION_EMAIL_MODE || 'mock').trim().toLowerCase();
 const PUSH_MODE = String(process.env.NOTIFICATION_PUSH_MODE || 'mock').trim().toLowerCase();
 
-const EMAIL_WEBHOOK_URL = process.env.NOTIFICATION_EMAIL_WEBHOOK_URL || '';
 const PUSH_WEBHOOK_URL = process.env.NOTIFICATION_PUSH_WEBHOOK_URL || '';
 
-const DEFAULT_EMAIL_PROVIDER = process.env.NOTIFICATION_EMAIL_PROVIDER || (EMAIL_MODE === 'webhook' ? 'webhook' : 'mock');
 const DEFAULT_PUSH_PROVIDER = process.env.NOTIFICATION_PUSH_PROVIDER || (PUSH_MODE === 'webhook' ? 'webhook' : 'mock');
 const DEFAULT_DELIVERY_BATCH_SIZE = toPositiveInt(process.env.NOTIFICATION_DELIVERY_BATCH_SIZE, 50);
+
+const getDefaultEmailProvider = () => {
+  const configured = String(process.env.NOTIFICATION_EMAIL_PROVIDER || '').trim().toLowerCase();
+  if (configured) {
+    return configured;
+  }
+
+  return resolveEmailProvider();
+};
 
 const normalizeChannels = (rawChannels) => {
   if (!Array.isArray(rawChannels) || rawChannels.length === 0) {
@@ -96,27 +104,39 @@ const postWebhook = async (url, payload) => {
 };
 
 const deliverEmail = async (delivery) => {
-  if (EMAIL_MODE === 'webhook' && EMAIL_WEBHOOK_URL) {
-    const result = await postWebhook(EMAIL_WEBHOOK_URL, {
-      channel: 'email',
-      provider: delivery.provider,
-      to: delivery.recipient,
-      title: delivery.title,
-      message: delivery.message,
+  const template = buildNotificationAlertTemplate({
+    title: delivery.title,
+    message: delivery.message,
+    payload: delivery.payload,
+  });
+
+  const result = await sendEmail({
+    to: delivery.recipient,
+    subject: template.subject,
+    text: template.text,
+    html: template.html,
+    provider: delivery.provider,
+    idempotencyKey: `notification-delivery/${delivery.id}`,
+    tags: [
+      { name: 'channel', value: 'notification' },
+      { name: 'template', value: template.name },
+      { name: 'alert_type', value: String(delivery.payload?.reason || 'alert_triggered').replace(/_/g, ' ') },
+    ],
+    metadata: {
+      source: 'notification_delivery_worker',
+      templateName: template.name,
+      alertId: delivery.alertId,
+      deliveryKey: delivery.deliveryKey,
       payload: delivery.payload,
-    });
-
-    return {
-      providerResponse: JSON.stringify(result),
-    };
-  }
-
-  console.log(
-    `[NOTIFICATIONS][EMAIL] mode=${EMAIL_MODE} recipient=${delivery.recipient || 'n/a'} title=${delivery.title}`
-  );
+    },
+  });
 
   return {
-    providerResponse: `email_${EMAIL_MODE || 'mock'}_simulated`,
+    providerResponse: JSON.stringify({
+      provider: result.provider,
+      providerMessageId: result.providerMessageId,
+      providerResponse: result.providerResponse,
+    }),
   };
 };
 
@@ -204,7 +224,7 @@ const queueAlertNotifications = async (triggeredAlerts, { evaluatedAt } = {}) =>
           evaluatedAt: evaluatedAtIso,
         }),
         channel: 'email',
-        provider: DEFAULT_EMAIL_PROVIDER,
+        provider: getDefaultEmailProvider(),
         recipient: user.email,
         title,
         message,

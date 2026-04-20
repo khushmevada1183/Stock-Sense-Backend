@@ -287,7 +287,7 @@ const openApiSpec = {
     '/api/v1/auth/forgot-password': {
       post: {
         tags: ['Auth'],
-        summary: 'Generate password reset token flow',
+        summary: 'Generate password reset code flow',
         requestBody: {
           required: true,
           content: {
@@ -307,19 +307,44 @@ const openApiSpec = {
         },
       },
     },
-    '/api/v1/auth/reset-password': {
+    '/api/v1/auth/verify-reset-code': {
       post: {
         tags: ['Auth'],
-        summary: 'Reset password with token',
+        summary: 'Verify password reset code and issue reset token',
         requestBody: {
           required: true,
           content: {
             'application/json': {
               schema: {
                 type: 'object',
-                required: ['token', 'newPassword'],
+                required: ['email', 'resetCode'],
                 properties: {
-                  token: { type: 'string' },
+                  email: { type: 'string', format: 'email' },
+                  resetCode: { type: 'string', pattern: '^[A-HJ-NP-Z2-9]{8}$' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: successResponse,
+          400: errorResponse,
+        },
+      },
+    },
+    '/api/v1/auth/reset-password': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Reset password using reset token issued after code verification',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['resetToken', 'newPassword'],
+                properties: {
+                  resetToken: { type: 'string', minLength: 32 },
                   newPassword: { type: 'string', minLength: 8 },
                 },
               },
